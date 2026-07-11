@@ -1,10 +1,12 @@
 import { describe, it, expect, beforeAll } from 'vitest';
-import { createClient } from '@supabase/supabase-js';
+import { newClient, makeTestUser, signUpAndRegisterSchool } from './helpers';
 
 // Bu test GERÇEK Supabase projesine bağlanır (env: NEXT_PUBLIC_SUPABASE_URL /
 // NEXT_PUBLIC_SUPABASE_ANON_KEY). Amaç: RLS'in okul verilerini birbirinden
 // gerçekten izole ettiğini kanıtlamak — A okulunun kullanıcısı B okulunun
-// verisini asla göremesin.
+// verisini asla göremesin. (Bu dosya taban şema tablolarını — schools,
+// school_users, staff — kapsar; Faz 2'nin yeni tabloları için bkz.
+// tenant-isolation-phase2.test.js)
 //
 // ÖNEMLİ — TEMİZLİK: Bu test anon key ile çalışır; anon key ile auth.users,
 // schools veya school_users satırları SİLİNEMEZ (bu tablolarda authenticated
@@ -16,55 +18,17 @@ import { createClient } from '@supabase/supabase-js';
 // anlamlı bir hata ile başarısız olur (README'de belirtildiği gibi, pilot
 // ortamda bu ayar kapalı tutulmalı).
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const RUN_ID = Date.now();
 
-function makeTestUser(label) {
-  return {
-    email: `zzz-tenant-test-${label}-${RUN_ID}@example.invalid`,
-    password: `TestPass${RUN_ID}!`,
-    schoolName: `ZZZ_TENANT_TEST_OKUL_${label.toUpperCase()}`,
-  };
-}
-
-async function signUpAndRegisterSchool(client, user) {
-  const { data: signUpData, error: signUpError } = await client.auth.signUp({
-    email: user.email,
-    password: user.password,
-  });
-  if (signUpError) {
-    throw new Error(`signUp başarısız (${user.email}): ${signUpError.message}`);
-  }
-  if (!signUpData.session) {
-    throw new Error(
-      `signUp oturum döndürmedi (${user.email}). Supabase Auth > Providers > Email > ` +
-        `"Confirm email" ayarı açık olabilir; pilot/test ortamında kapatılmalı.`
-    );
-  }
-  const { data: schoolId, error: rpcError } = await client.rpc('register_school', {
-    p_name: user.schoolName,
-    p_city: 'Test',
-    p_district: 'Test',
-  });
-  if (rpcError) {
-    throw new Error(`register_school başarısız (${user.email}): ${rpcError.message}`);
-  }
-  return schoolId;
-}
-
-describe('tenant izolasyonu (RLS) — gerçek Supabase projesine karşı', () => {
+describe('tenant izolasyonu (RLS) — taban şema — gerçek Supabase projesine karşı', () => {
   let clientA, clientB, schoolIdA, schoolIdB;
 
   beforeAll(async () => {
-    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-      throw new Error('.env.local içinde NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY bulunamadı.');
-    }
-    clientA = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-    clientB = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    clientA = newClient();
+    clientB = newClient();
 
-    schoolIdA = await signUpAndRegisterSchool(clientA, makeTestUser('a'));
-    schoolIdB = await signUpAndRegisterSchool(clientB, makeTestUser('b'));
+    schoolIdA = await signUpAndRegisterSchool(clientA, makeTestUser('a', RUN_ID));
+    schoolIdB = await signUpAndRegisterSchool(clientB, makeTestUser('b', RUN_ID));
 
     // B'nin okuluna ait, A'nın asla göremeyeceği bir personel kaydı oluştur.
     const { error } = await clientB

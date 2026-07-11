@@ -1,5 +1,88 @@
 # PHASE_REPORT.md
 
+## Faz 2 — Veritabanı Şeması (durum: migration'lar yazıldı, canlıya UYGULANMADI)
+
+### Tamamlanan
+
+1. 7 yeni migration dosyası yazıldı (`supabase/migrations/0003`–`0009`),
+   toplam 8 yeni tablo + `schools` tablosuna 3 yeni sütun:
+   - `0003_school_profile.sql` — `schools.school_type`, `education_shift`, `profile` (jsonb)
+   - `0004_teachers_and_zones.sql` — `teachers`, `duty_zones`
+   - `0005_time_model.sql` — `calendar_days`, `time_slots` (ikili öğretim burada çözülüyor)
+   - `0006_availability_and_closures.sql` — `teacher_unavailable_days`, `zone_closures`
+   - `0007_rule_and_rotation_engine.sql` — `rules`, `rotations`
+   - `0008_exceptions.sql` — `exceptions` (rapor/izin/görevlendirme/muafiyet/takas)
+   - `0009_duty_assignments.sql` — `duty_assignments`
+   Hepsinde `school_id = current_school_id()` deseniyle RLS var, `authenticated`
+   rolüne CRUD grant'i var — mevcut `staff`/`locations`/`settings`/`holidays`
+   tablolarındaki desenle birebir tutarlı.
+2. `staff`/`locations` tablolarına dokunulmadı — eski panel hâlâ onları
+   kullanıyor. Yeni tablolar (`teachers`, `duty_zones`) CLAUDE.md ortak diline
+   uygun, Faz 4-5 motorlarının okuyacağı kanonik tablolar; eski panel Faz 3'te
+   yeni sihirbaz tabanlı panelle değişince `staff`/`locations` kaldırılacak.
+3. `tests/db/tenant-isolation.test.js` yardımcı kurulum kodu
+   `tests/db/helpers.js`'e çıkarıldı (tekrar önlendi), yeniden çalıştırıldı — 5/5 yeşil.
+4. `tests/db/tenant-isolation-phase2.test.js` yazıldı: yeni 8 tablonun her biri
+   için "B okulunun satırını A okuyamaz" testi (`it.each`). **Migration'lar
+   canlıya henüz uygulanmadığı için bu test şu an kasıtlı olarak KIRMIZI**
+   (`relation "public.teachers" does not exist` — beklenen hata, aşağıya bakın).
+
+### ⚠️ Kullanıcı eylemi gerekli — migration'ları uygula
+
+Elimde migration'ları otomatik uygulayacak bir yetkim yok (anon key DDL
+çalıştıramaz, service_role/DB şifresi/supabase CLI bağlantısı yok). Faz 1'de
+belirlenen desene uyarak: `supabase/migrations/0003_school_profile.sql`'den
+`0009_duty_assignments.sql`'e kadar dosyaları **sırasıyla** Supabase Dashboard
+→ SQL Editor'de çalıştırman gerekiyor (0001/0002 nasıl çalıştırıldıysa aynı
+şekilde). Uyguladıktan sonra haber ver, `tests/db/tenant-isolation-phase2.test.js`'i
+çalıştırıp RLS'in yeni tablolarda da doğru kurulduğunu kanıtlayacağım —
+Faz 2 ancak o test yeşil olunca "bitti" sayılacak (CLAUDE.md: "kırmızı test
+varken faz bitti sayılmaz").
+
+Bu arada Faz 1'dekine ek olarak yine "ZZZ_TENANT_TEST_" önekli 2 yeni geçici
+kullanıcı/okul daha oluştu (helper testleri tekrar çalıştırıldığı için) —
+temizlik listesi Faz 2 sonunda tek seferde güncellenecek.
+
+### Bilinçli kararlar / teknik borç
+
+- **`exception_type` enum'ında tıbbi kategori yok.** Erken tasarımda
+  `dogum_izni` gibi bir kategori düşünülmüştü; KVKK notuna uyarak bunun yerine
+  genel `muafiyet` kategorisi kullanıldı — tıbbi gerekçe hiçbir yerde
+  saklanmıyor, sadece tarih aralığı.
+- **`teacher_unavailable_days` adı bilinçli olarak "available" değil
+  "unavailable"** — hard rule handler adıyla (`unavailable_days`) tutarlı
+  olsun ve "kayıt yoksa müsaittir" varsayımı isimden belli olsun diye.
+- **`duty_assignments` üzerinde `unique(teacher_id, duty_date, slot_key)`**
+  var ama `zone_id`'ye göre bir unique kısıt yok — `required_count > 1` olan
+  bölgelerde aynı zone/tarih/slota birden fazla öğretmen atanabilmesi
+  gerektiği için bilinçli olarak eklenmedi.
+- **`current_school_id()` fonksiyonunun gerçek tanımı hâlâ bilinmiyor**
+  (Faz 1'den taşınan risk) — yeni RLS politikaları onu çağırıyor ama içeriğini
+  doğrulayamadık; taban şema dosyası gelince kontrol edilecek.
+
+### Test kapsamı
+
+- `lib/engine/`: değişmedi (3/3 yeşil).
+- `lib/db`/RLS: taban şema 5/5 yeşil; Faz 2 tabloları 11 test yazıldı,
+  migration'lar uygulanana kadar kırmızı (beklenen).
+- e2e: değişmedi (2/2 yeşil).
+
+### Sonraki faz (Faz 3 — Panel + Sihirbaz) riskleri
+
+1. **Migration'lar uygulanmadan Faz 3'e geçilirse** yeni panel/sihirbaz kodu
+   var olmayan tablolara yazmaya çalışır → azaltma: Faz 3 başlamadan önce
+   `tenant-isolation-phase2` testinin yeşil olması şart koşulacak.
+2. **`teachers`/`staff` ikiliği kullanıcı arayüzünde kafa karışıklığı
+   yaratabilir** (iki ayrı "öğretmen listesi" var izlenimi) → azaltma: Faz 3
+   sihirbazı sadece `teachers`'ı kullanacak, eski `staff` ekranına hiç link
+   verilmeyecek.
+3. **`profile` jsonb alanının şekli henüz sabitlenmedi** (floor_count,
+   pansiyon vb. anahtar isimleri kodda değil sadece bu raporda tanımlı) →
+   azaltma: Faz 3 sihirbazı yazılırken bu anahtarlar `lib/db/schools.js`
+   içinde tek bir yerde sabitlenecek, dağınık string literal kullanılmayacak.
+
+---
+
 ## Faz 1 — İskelet Denetimi
 
 ### Mevcut durum (denetim bulguları)
