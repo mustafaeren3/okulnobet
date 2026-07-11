@@ -1,7 +1,7 @@
 'use server';
 
 import { createClient } from '@/lib/supabase/server';
-import { PALETTE } from '@/lib/schedule';
+import { PALETTE } from '@/lib/engine/schedule';
 
 // Müdür yardımcıları, rehber/psikolojik danışman, özel eğitim ve
 // anaokulu (okul öncesi) öğretmenleri her zaman dışarıda bırakılır.

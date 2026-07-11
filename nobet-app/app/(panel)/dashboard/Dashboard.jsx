@@ -14,7 +14,7 @@ import {
   groupByWeek,
   luminance,
   generateSchedule as computeSchedule,
-} from '@/lib/schedule';
+} from '@/lib/engine/schedule';
 import { fetchTeskilatOgretmenleri } from './actions';
 import './dashboard.css';
 
