@@ -43,3 +43,18 @@ export async function deleteTeacher(supabase, teacherId) {
   const { error } = await supabase.from('teachers').delete().eq('id', teacherId);
   if (error) throw new Error(error.message);
 }
+
+export async function createTeachersBulk(supabase, schoolId, teachers) {
+  if (!teachers.length) return [];
+  const rows = teachers.map((t) => ({
+    school_id: schoolId,
+    full_name: t.full_name,
+    branch: t.branch,
+    weekly_capacity: t.weekly_capacity ?? 1,
+    allow_double_duty: t.allow_double_duty ?? false,
+    restriction_mode: t.restriction_mode ?? 'ALL',
+  }));
+  const { data, error } = await supabase.from('teachers').insert(rows).select();
+  if (error) throw new Error(error.message);
+  return data;
+}

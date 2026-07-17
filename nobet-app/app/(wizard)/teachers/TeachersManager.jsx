@@ -9,6 +9,7 @@ import {
   removeTeacher,
   fetchTeacherAvailability,
   saveTeacherAvailability,
+  fetchTeskilatOgretmenleri,
 } from './actions';
 import './teachers.css';
 
@@ -42,6 +43,9 @@ export default function TeachersManager({ schoolId, schoolName, initialTeachers 
   const [inpMode, setInpMode] = useState('ALL');
   const [inpWeekdays, setInpWeekdays] = useState([]);
   const [saving, setSaving] = useState(false);
+
+  const [teskilatUrl, setTeskilatUrl] = useState('');
+  const [fetchingTeskilat, setFetchingTeskilat] = useState(false);
 
   function showToast(msg, isErr = false) {
     setToast({ msg, isErr, visible: true });
@@ -91,6 +95,21 @@ export default function TeachersManager({ schoolId, schoolName, initialTeachers 
     setInpWeekdays([]);
     setSaving(false);
     showToast(`${full_name} eklendi`);
+  }
+
+  async function handleFetchTeskilat() {
+    const url = teskilatUrl.trim();
+    if (!url) { showToast('Teşkilat şeması adresini giriniz!', true); return; }
+
+    setFetchingTeskilat(true);
+    const result = await fetchTeskilatOgretmenleri(url);
+    setFetchingTeskilat(false);
+
+    if (result.error) { showToast(result.error, true); return; }
+    if (result.added.length) {
+      setTeachers((t) => [...t, ...result.added].sort((a, b) => a.full_name.localeCompare(b.full_name, 'tr')));
+    }
+    showToast(`${result.totalFound} öğretmen bulundu, ${result.added.length} eklendi (${result.skipped} zaten vardı)`);
   }
 
   async function toggleActive(teacher) {
@@ -180,6 +199,20 @@ export default function TeachersManager({ schoolId, schoolName, initialTeachers 
         <button className="teach-btn teach-btn-primary" style={{ marginTop: 14 }} onClick={handleAdd} disabled={saving}>
           + Ekle
         </button>
+
+        <div className="teach-info-box" style={{ marginTop: 20 }}>
+          💡 Okulunun MEB web sitesindeki teşkilat şeması (kadromuz) adresini gir, sınıf ve branş öğretmenlerini otomatik çeksin (müdür, müdür yardımcıları, rehber ve anaokulu öğretmenleri hariç tutulur):
+          <input
+            type="text"
+            placeholder="https://okulunuz.meb.k12.tr/tema/teskilat_semasi.html"
+            value={teskilatUrl}
+            onChange={(e) => setTeskilatUrl(e.target.value)}
+            style={{ marginTop: 8 }}
+          />
+          <button className="teach-btn teach-btn-outline" style={{ marginTop: 8, width: '100%' }} onClick={handleFetchTeskilat} disabled={fetchingTeskilat}>
+            {fetchingTeskilat ? 'Çekiliyor...' : '👥 Teşkilat Şemasından Öğretmenleri Çek'}
+          </button>
+        </div>
       </div>
 
       <div className="teach-card">

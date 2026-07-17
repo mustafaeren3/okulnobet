@@ -70,6 +70,16 @@
   font-size: 13px;
 }
 
+.teach-info-box {
+  background: rgba(79, 126, 247, 0.08);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px;
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
 .teach-checkbox-row {
   display: flex;
   align-items: center;
