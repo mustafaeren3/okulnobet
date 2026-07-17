@@ -1,6 +1,38 @@
 # PHASE_REPORT.md
 
-## Faz 2 — Veritabanı Şeması (durum: migration'lar yazıldı, canlıya UYGULANMADI)
+## Faz 3 — Öğretmen Yönetimi (devam ediyor)
+
+### Tamamlanan
+
+1. **Migration'lar canlıya uygulandı.** 0003-0009, Supabase CLI (`supabase db query --linked -f ...`) ile tek tek çalıştırıldı ve her birinden sonra doğrulandı (tablo/kolon/policy kontrolü). `tenant-isolation-phase2.test.js`: 11/11 yeşil, tam paket 19/19 yeşil.
+2. Uygulama sırasında bir hata bulundu ve düzeltildi: `duty_assignments` unique kısıtına `zone_id` eklemek önceki commit'te sadece yorum satırına yazılmış, gerçek `unique(...)` satırına uygulanmamıştı. Hem migration dosyası hem canlı tablo (`ALTER TABLE`, tablo boştu) düzeltildi.
+3. **`lib/db/teachers.js`** ve **`lib/db/teacherAvailability.js`** yazıldı — `teachers` ve `teacher_unavailable_days` için saf CRUD katmanı, Supabase client'ı parametre olarak alıyor (test edilebilir, Next.js'e bağımlı değil).
+4. **`app/(wizard)/teachers/`** — Öğretmen Yönetimi ekranı: liste, ekle, düzenle (aktif/pasif), sil, `restriction_mode` (ALL/ONLY/EXCEPT) + haftagünü seçici ile müsaitlik yönetimi. Server action'lar (`actions.js`) `lib/db` katmanını sarmalıyor, component doğrudan Supabase çağırmıyor.
+5. `middleware.js`'e `/teachers/:path*` matcher'ı eklendi (eski `/dashboard/:path*` davranışına dokunulmadı).
+6. `tests/db/teachers-crud.test.js`: `lib/db` katmanının gerçek Supabase'e karşı fonksiyonel doğruluğu (create/update/delete + weekday round-trip) — 4/4 yeşil.
+7. Tarayıcıda uçtan uca elle doğrulandı: kayıt ol → `/teachers` → ONLY modunda öğretmen ekle (Pzt+Çar) → müsaitliği aç, günlerin doğru kaydedildiğini gör → pasifleştir/aktifleştir → sil. Hepsi beklendiği gibi çalıştı.
+
+### Bilinçli kararlar / teknik borç
+
+- `teachers` silme işlemi şu an **hard delete** (eski `staff` panelindeki `removePerson` deseniyle tutarlı). `duty_assignments`/`exceptions`/`rotations` üzerindeki `on delete cascade` nedeniyle bir öğretmen silinirse geçmiş nöbet kayıtları da silinir — Faz 5'te gerçek nöbet verisi girilmeye başlanınca bunun yerine `is_active=false` (zaten var) tercih edilmesi gerekebilir, silme UI'dan kaldırılabilir. Şimdilik veri yok, risk düşük.
+- `duty_zones` yönetim ekranı henüz yok — bu fazın kapsamı sadece `teachers` + `teacher_unavailable_days`.
+- Test verisi: `ZZZ_TENANT_TEST_*` (Faz 1/2'den) + yeni `ZZZ_UI_TEST_OKUL` / `zzz-ui-test-*@example.invalid` (bu fazın tarayıcı doğrulamasından) — Dashboard'dan elle temizlenmeli.
+- Migration'ları uygulamak için kullanılan Supabase personal access token hâlâ aktif olabilir — Dashboard → Access Tokens'tan revoke edilmesi öneriliyor.
+
+### Test kapsamı
+
+- `lib/db/`: `teachers-crud.test.js` 4/4 yeşil (fonksiyonel), `tenant-isolation-phase2.test.js` 11/11 yeşil (RLS).
+- e2e: değişmedi (2/2 yeşil) — `/teachers` için ayrı bir Playwright akışı henüz yok.
+- Tam paket: 23/23 yeşil.
+
+### Sonraki adım riskleri
+
+1. **`duty_zones` UI'ı yok** — nöbet motoru (Faz 4-5) hem `teachers` hem `duty_zones` okuyacak, ikincisi olmadan uçtan uca akış test edilemez → azaltma: bir sonraki artış `duty_zones` yönetim ekranı olmalı.
+2. **Hard delete + cascade riski** yukarıda not edildi → azaltma: gerçek nöbet verisi girilmeden önce silme davranışı gözden geçirilecek.
+
+---
+
+## Faz 2 — Veritabanı Şeması (durum: migration'lar canlıya UYGULANDI — bkz. Faz 3)
 
 ### Tamamlanan
 

@@ -28,8 +28,9 @@ export async function middleware(request) {
 
   const { data: { user } } = await supabase.auth.getUser();
 
-  // Giriş yapılmamışsa /dashboard'a erişimi engelle
-  if (!user && request.nextUrl.pathname.startsWith('/dashboard')) {
+  // Giriş yapılmamışsa korumalı sayfalara erişimi engelle
+  const protectedPaths = ['/dashboard', '/teachers'];
+  if (!user && protectedPaths.some((p) => request.nextUrl.pathname.startsWith(p))) {
     return NextResponse.redirect(new URL('/login', request.url));
   }
 
@@ -37,5 +38,5 @@ export async function middleware(request) {
 }
 
 export const config = {
-  matcher: ['/dashboard/:path*'],
+  matcher: ['/dashboard/:path*', '/teachers/:path*'],
 };
