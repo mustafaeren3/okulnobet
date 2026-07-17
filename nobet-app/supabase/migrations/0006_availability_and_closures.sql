@@ -1,12 +1,17 @@
 -- ═══════════════════════════════════════════════════════════════
 -- teacher_unavailable_days + zone_closures
 -- ═══════════════════════════════════════════════════════════════
--- teacher_unavailable_days: bir öğretmenin HANGİ haftanın günlerinde
--- (+ isteğe bağlı hangi zaman diliminde) okulda/nöbette olmadığını
--- tutar. Varsayım: kayıt yoksa öğretmen o gün müsaittir (satır sadece
--- istisnayı temsil eder — "available" tablosu değil "unavailable").
--- shift = 'all' → o gün tamamen müsait değil; 'morning'/'afternoon' →
--- ikili öğretimde sadece o dilimde müsait değil.
+-- teacher_unavailable_days: bir öğretmen için seçilmiş haftanın günlerini
+-- tutar. Sadece weekday saklanır — anlamı tek başına bu tablodan
+-- çıkarılamaz, teachers.restriction_mode ile birlikte okunur:
+-- 'ALL'    → bu tablodaki satırlar yok sayılır (kısıt yok).
+-- 'ONLY'   → buradaki günler öğretmenin çalıştığı TEK günlerdir.
+-- 'EXCEPT' → buradaki günler öğretmenin çalışmadığı günlerdir.
+-- (Faz 2'nin ilk sürümünde ayrıca bir 'shift' kolonu vardı — ikili
+-- öğretimde sabah/öğleden sonra ayrımı için. MVP kapsamı dışına
+-- alındı, ürün kararıyla tabloyu sadece weekday tutacak şekilde
+-- basitleştirdik; ikili öğretim dilim bazlı kısıt gerekirse ayrı bir
+-- migration'da eklenecek.)
 --
 -- zone_closures: bir bölgenin geçici olarak kapalı olduğu tarih aralığı
 -- (tadilat, spor salonu arızası, kantin kapalı vb.).
@@ -16,9 +21,8 @@ create table if not exists public.teacher_unavailable_days (
   school_id uuid not null references public.schools(id) on delete cascade,
   teacher_id uuid not null references public.teachers(id) on delete cascade,
   weekday int not null check (weekday between 0 and 6),
-  shift text not null default 'all' check (shift in ('all','morning','afternoon')),
   created_at timestamptz not null default now(),
-  unique (teacher_id, weekday, shift)
+  unique (teacher_id, weekday)
 );
 
 alter table public.teacher_unavailable_days enable row level security;

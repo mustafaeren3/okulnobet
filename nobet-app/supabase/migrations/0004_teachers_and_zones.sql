@@ -10,12 +10,26 @@
 -- kaldırılacak.
 
 -- ── teachers ──────────────────────────────────────────────────────
+-- allow_double_duty: true ise Scheduling Engine (Faz 5) bu öğretmeni
+-- aynı gün/slot'ta birden fazla bölgeye atayabilir (bkz. duty_assignments
+-- unique kısıtı aşağıda — zone_id'yi de içeriyor, bu yüzden çift atama
+-- şema seviyesinde mümkün; kuralın UYGULANMASI motorun işi).
+--
+-- restriction_mode + teacher_unavailable_days.weekday birlikte çalışır:
+-- 'ALL'    → kısıt yok, teacher_unavailable_days'teki satırlar yok sayılır.
+-- 'ONLY'   → teacher_unavailable_days'teki günler öğretmenin ÇALIŞTIĞI
+--            (izin verilen) tek günlerdir, listede olmayan gün kapalıdır.
+-- 'EXCEPT' → teacher_unavailable_days'teki günler öğretmenin ÇALIŞMADIĞI
+--            günlerdir, listede olmayan her gün müsaittir.
+-- Yorumlama motorun (lib/engine/rules/) işi; bu tablo sadece veriyi tutar.
 create table if not exists public.teachers (
   id uuid primary key default gen_random_uuid(),
   school_id uuid not null references public.schools(id) on delete cascade,
   full_name text not null,
   branch text not null,
   weekly_capacity int not null default 1,
+  allow_double_duty boolean not null default false,
+  restriction_mode text not null default 'ALL' check (restriction_mode in ('ALL','ONLY','EXCEPT')),
   is_active boolean not null default true,
   attributes jsonb not null default '{}'::jsonb,
   created_at timestamptz not null default now()

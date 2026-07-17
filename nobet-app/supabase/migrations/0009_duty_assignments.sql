@@ -1,10 +1,16 @@
 -- ═══════════════════════════════════════════════════════════════
 -- DUTY_ASSIGNMENTS (motorun ürettiği/idarecinin elle düzenlediği atamalar)
 -- ═══════════════════════════════════════════════════════════════
--- unique(teacher_id, duty_date, slot_key): aynı öğretmen aynı gün+dilimde
--- iki kez atanamaz (çift nöbet farklı slot_key veya farklı zone ile temsil
--- edilir, aynı teacher+date+slot çifti değil). is_manual = true olan
--- satırlara Scheduling Engine (Faz 5) bir daha dokunmaz.
+-- unique(teacher_id, duty_date, slot_key, zone_id): aynı öğretmen aynı
+-- gün+dilim+bölgeye iki kez atanamaz (kopya kayıt engellenir), ama
+-- teachers.allow_double_duty = true olan bir öğretmen aynı gün+dilimde
+-- FARKLI bir zone_id ile ikinci kez atanabilir — çift nöbet (x2) bu
+-- şekilde temsil edilir. zone_id'yi kısıttan çıkarmak (eski hâli)
+-- çift nöbeti şema seviyesinde imkansız kılıyordu; kısıta eklendi.
+-- "İkinci atama sadece allow_double_duty=true olan öğretmene izin
+-- verilsin" kuralı DB seviyesinde değil, Scheduling Engine'de (Faz 5)
+-- uygulanır — burada sadece kopya kaydı engelliyoruz.
+-- is_manual = true olan satırlara Scheduling Engine bir daha dokunmaz.
 
 create table if not exists public.duty_assignments (
   id uuid primary key default gen_random_uuid(),
