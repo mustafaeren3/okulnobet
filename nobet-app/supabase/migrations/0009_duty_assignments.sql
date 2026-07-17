@@ -22,7 +22,7 @@ create table if not exists public.duty_assignments (
   is_manual boolean not null default false,
   score_detail jsonb not null default '{}'::jsonb,
   created_at timestamptz not null default now(),
-  unique (teacher_id, duty_date, slot_key)
+  unique (teacher_id, duty_date, slot_key, zone_id)
 );
 
 alter table public.duty_assignments enable row level security;
