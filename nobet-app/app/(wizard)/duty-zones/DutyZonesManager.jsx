@@ -58,10 +58,16 @@ export default function DutyZonesManager({ schoolId, schoolName, initialZones })
     if (!name) { showToast('Bölge adı giriniz!', true); return; }
     if (!inpActiveDays.length) { showToast('En az bir aktif gün seçin!', true); return; }
 
+    const requiredCount = parseInt(inpRequiredCount, 10);
+    if (!Number.isInteger(requiredCount) || requiredCount < 1) {
+      showToast('Gereken kişi sayısı en az 1 olmalı!', true);
+      return;
+    }
+
     setSaving(true);
     const result = await addDutyZone({
       name,
-      required_count: parseInt(inpRequiredCount, 10) || 1,
+      required_count: requiredCount,
       priority: parseInt(inpPriority, 10) || 0,
       active_days: inpActiveDays,
       allowed_branches: parseBranchList(inpAllowedBranches),

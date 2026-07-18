@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { createTeacher, updateTeacher, deleteTeacher, createTeachersBulk, getTeachers } from '@/lib/db/teachers';
 import { getUnavailableWeekdays, setUnavailableWeekdays } from '@/lib/db/teacherAvailability';
+import { requireSchoolId } from '@/lib/db/schoolContext';
 
 // Müdür, müdür yardımcıları, rehber/psikolojik danışman, özel eğitim ve
 // anaokulu (okul öncesi) öğretmenleri her zaman dışarıda bırakılır.
@@ -43,18 +44,6 @@ function normalizeBranch(role) {
 // sayfasında her kişi <a href="..." title="ROL">AD SOYAD<br /><span>ROL</a>
 // biçiminde listelenir. Bu yapı ilkokul/ortaokul/lise fark etmeksizin aynı.
 const PERSON_RE = /<a\s+href=["'][^"']*["']\s+title=["']([^"']*)["']>([^<]*)<br\s*\/?>\s*<span>([^<]*)<\/a>/gi;
-
-async function requireSchoolId(supabase) {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error('Giriş yapılmamış.');
-  const { data: schoolUser } = await supabase
-    .from('school_users')
-    .select('school_id')
-    .eq('user_id', user.id)
-    .single();
-  if (!schoolUser) throw new Error('Kullanıcı bir okula bağlı değil.');
-  return schoolUser.school_id;
-}
 
 export async function addTeacher(payload) {
   const supabase = createClient();
@@ -151,7 +140,12 @@ export async function fetchTeskilatOgretmenleri(url) {
     return { error: 'Sayfada uygun öğretmen bulunamadı. Bu sitenin yapısı desteklenen şablondan farklı olabilir.' };
   }
 
-  const existing = await getTeachers(supabase, schoolId);
+  let existing;
+  try {
+    existing = await getTeachers(supabase, schoolId);
+  } catch (e) {
+    return { error: e.message };
+  }
   const existingNames = new Set(existing.map((t) => normalizeTr(t.full_name)));
 
   const rows = [];

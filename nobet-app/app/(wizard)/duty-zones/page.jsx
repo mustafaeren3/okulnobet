@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
+import { getSchoolForUser } from '@/lib/db/schoolContext';
 import { getDutyZones } from '@/lib/db/dutyZones';
 import DutyZonesManager from './DutyZonesManager';
 
@@ -8,13 +9,9 @@ export default async function DutyZonesPage() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect('/login');
 
-  const { data: schoolUser } = await supabase
-    .from('school_users')
-    .select('school_id, schools(name)')
-    .eq('user_id', user.id)
-    .single();
+  const school = await getSchoolForUser(supabase, user.id);
 
-  if (!schoolUser) {
+  if (!school) {
     return (
       <main style={{ maxWidth: 600, margin: '60px auto', fontFamily: 'sans-serif', padding: '0 16px' }}>
         <h1>Henüz bir okula bağlı değilsin.</h1>
@@ -22,13 +19,12 @@ export default async function DutyZonesPage() {
     );
   }
 
-  const schoolId = schoolUser.school_id;
-  const zones = await getDutyZones(supabase, schoolId);
+  const zones = await getDutyZones(supabase, school.schoolId);
 
   return (
     <DutyZonesManager
-      schoolId={schoolId}
-      schoolName={schoolUser.schools?.name}
+      schoolId={school.schoolId}
+      schoolName={school.schoolName}
       initialZones={zones}
     />
   );

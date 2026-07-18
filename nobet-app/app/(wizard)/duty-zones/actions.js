@@ -3,18 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { createDutyZone, updateDutyZone, deleteDutyZone } from '@/lib/db/dutyZones';
-
-async function requireSchoolId(supabase) {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error('Giriş yapılmamış.');
-  const { data: schoolUser } = await supabase
-    .from('school_users')
-    .select('school_id')
-    .eq('user_id', user.id)
-    .single();
-  if (!schoolUser) throw new Error('Kullanıcı bir okula bağlı değil.');
-  return schoolUser.school_id;
-}
+import { requireSchoolId } from '@/lib/db/schoolContext';
 
 export async function addDutyZone(payload) {
   const supabase = createClient();
