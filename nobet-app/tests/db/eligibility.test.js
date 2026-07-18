@@ -3,7 +3,7 @@ import { newClient, makeTestUser, signUpAndRegisterSchool } from './helpers';
 import { createTeacher } from '@/lib/db/teachers';
 import { createDutyZone } from '@/lib/db/dutyZones';
 import { setUnavailableWeekdays } from '@/lib/db/teacherAvailability';
-import { checkAssignmentEligibility } from '@/lib/db/eligibility';
+import { checkAssignmentEligibility, getEligibleTeachersForZone } from '@/lib/db/eligibility';
 
 // checkAssignmentEligibility'nin gerçek Supabase verisiyle uçtan uca
 // (DB → lib/engine/rules) doğru çalıştığını kanıtlar.
@@ -59,5 +59,44 @@ describe('lib/db/eligibility — checkAssignmentEligibility', () => {
     expect(result.eligible).toBe(false);
     const ruleKeys = result.violations.map((v) => v.ruleKey).sort();
     expect(ruleKeys).toEqual(['branch_match', 'teacher_availability']);
+  });
+});
+
+describe('lib/db/eligibility — getEligibleTeachersForZone', () => {
+  let client, schoolId, zone, eligibleTeacher, ineligibleTeacher;
+
+  beforeAll(async () => {
+    client = newClient();
+    schoolId = await signUpAndRegisterSchool(client, makeTestUser('elig-scan', RUN_ID));
+
+    eligibleTeacher = await createTeacher(client, schoolId, {
+      full_name: 'ZZZ_TENANT_TEST_ELIG_SCAN_OK',
+      branch: 'sınıf',
+    });
+    ineligibleTeacher = await createTeacher(client, schoolId, {
+      full_name: 'ZZZ_TENANT_TEST_ELIG_SCAN_BAD',
+      branch: 'sınıf',
+      restriction_mode: 'EXCEPT',
+    });
+    await setUnavailableWeekdays(client, schoolId, ineligibleTeacher.id, [2]); // Salı müsait değil
+
+    zone = await createDutyZone(client, schoolId, { name: 'ZZZ_TENANT_TEST_ELIG_SCAN_ZONE' });
+  }, 30000);
+
+  it('okuldaki her öğretmen için bir sonuç döndürür, uygun/uygun değil doğru ayrılır', async () => {
+    const results = await getEligibleTeachersForZone(client, {
+      schoolId,
+      zoneId: zone.id,
+      date: '2026-10-06', // Salı
+    });
+
+    expect(results).toHaveLength(2);
+
+    const eligibleResult = results.find((r) => r.teacher.id === eligibleTeacher.id);
+    const ineligibleResult = results.find((r) => r.teacher.id === ineligibleTeacher.id);
+
+    expect(eligibleResult.eligible).toBe(true);
+    expect(ineligibleResult.eligible).toBe(false);
+    expect(ineligibleResult.violations[0].ruleKey).toBe('teacher_availability');
   });
 });

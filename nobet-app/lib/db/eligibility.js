@@ -4,11 +4,11 @@
 // kendisi hâlâ saf kalır (kural 1) — bu dosya sadece "veriyi çek, saf
 // fonksiyona ver" işini yapar.
 
-import { getTeacherById } from './teachers';
+import { getTeacherById, getTeachers } from './teachers';
 import { getDutyZoneById } from './dutyZones';
-import { getUnavailableWeekdays } from './teacherAvailability';
+import { getUnavailableWeekdays, getUnavailableWeekdaysForTeachers } from './teacherAvailability';
 import { getZoneClosures } from './zoneClosures';
-import { getAssignmentCountForTeacherDate } from './dutyAssignments';
+import { getAssignmentCountForTeacherDate, getAssignmentCountsForDate } from './dutyAssignments';
 import { checkHardRules } from '@/lib/engine/rules';
 import { getWeekday } from '@/lib/engine/weekday';
 
@@ -29,5 +29,38 @@ export async function checkAssignmentEligibility(supabase, { teacherId, zoneId, 
     date,
     weekday: getWeekday(date),
     existingAssignmentCountForDate,
+  });
+}
+
+// Bir bölge+tarih için okuldaki TÜM öğretmenleri tarar, her biri için
+// hard rule sonucunu döndürür (henüz seçim/atama yapmaz — Scheduling
+// Engine'in "kimi seçeceğiz" kısmı ayrı bir adım). Öğretmen başına ayrı
+// sorgu atmak yerine 4 toplu sorgu kullanır.
+export async function getEligibleTeachersForZone(supabase, { schoolId, zoneId, date }) {
+  const [zone, teachers, closures] = await Promise.all([
+    getDutyZoneById(supabase, zoneId),
+    getTeachers(supabase, schoolId),
+    getZoneClosures(supabase, zoneId),
+  ]);
+
+  const teacherIds = teachers.map((t) => t.id);
+  const [unavailableByTeacher, assignmentCountsByTeacher] = await Promise.all([
+    getUnavailableWeekdaysForTeachers(supabase, teacherIds),
+    getAssignmentCountsForDate(supabase, schoolId, date),
+  ]);
+
+  const weekday = getWeekday(date);
+
+  return teachers.map((teacher) => {
+    const result = checkHardRules({
+      teacher,
+      zone,
+      unavailableWeekdays: unavailableByTeacher[teacher.id] || [],
+      closures,
+      date,
+      weekday,
+      existingAssignmentCountForDate: assignmentCountsByTeacher[teacher.id] || 0,
+    });
+    return { teacher, ...result };
   });
 }

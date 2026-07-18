@@ -1,6 +1,33 @@
 # PHASE_REPORT.md
 
-## Faz 4 — Rule Engine (hard rule seti tamamlandı, devam ediyor)
+## Faz 5 — Scheduling Engine (aday listesi tarama, devam ediyor)
+
+### Tamamlanan
+
+1. **`lib/db/eligibility.js` — `getEligibleTeachersForZone(supabase, { schoolId, zoneId, date })`.** Bir bölge+tarih için okuldaki TÜM öğretmenleri tarayıp her biri için `{ teacher, eligible, violations }` döndürür. Henüz seçim/atama yapmıyor (kullanıcı onayıyla bilinçli — rotasyon algoritması ayrı bir karar, bu turun kapsamı dışında).
+2. Performans: öğretmen başına ayrı sorgu atmak yerine 4 toplu sorgu kullanılıyor (`Promise.all` ile paralel) — yeni toplu okuma fonksiyonları:
+   - `lib/db/teacherAvailability.js`: `getUnavailableWeekdaysForTeachers(supabase, teacherIds)` — `teacher_unavailable_days`'i `.in('teacher_id', ...)` ile tek sorguda çekip `teacherId → weekday[]` map'ine indirger.
+   - `lib/db/dutyAssignments.js`: `getAssignmentCountsForDate(supabase, schoolId, date)` — bir okulun bir tarihteki tüm atamalarını tek sorguda çekip `teacherId → sayı` map'ine indirger.
+3. `tests/db/eligibility.test.js`'e yeni `describe` bloğu: 2 öğretmenli (biri uygun, biri `EXCEPT` kısıtıyla uygun değil) ayrı bir test okulunda tarama — sonuç dizisinin doğru uzunlukta olduğu ve her öğretmenin doğru `eligible`/`violations` aldığı doğrulandı. Tam paket 60/60 yeşil.
+
+### Bilinçli kararlar / teknik borç
+
+- **Seçim/atama mantığı yok.** `getEligibleTeachersForZone` sadece "kimler uygun" sorusuna cevap veriyor; `required_count` kadar öğretmen seçmek, eşit dağılım/rotasyon uygulamak henüz yazılmadı — bir sonraki artışın konusu.
+- **`rules` tablosuyla bağlantı hâlâ yok** (Faz 4'ten devreden risk, aşağıya bakın).
+
+### Test kapsamı
+
+- `lib/db/`: `eligibility.test.js` toplam 3/3 (1 yeni `describe` bloğu eklendi).
+- Tam paket: 60/60 yeşil.
+
+### Sonraki adım riskleri
+
+1. **Seçim/rotasyon algoritması yok** → `getEligibleTeachersForZone` bir aday listesi veriyor ama "required_count kadar kimi seçelim" sorusunu cevaplamıyor → azaltma: bir sonraki artış bu seçim mantığını (basit adillik mi, `rotations` tablosundaki cursor mantığı mı) netleştirip yazmalı — büyük bir ürün kararı, ayrı bir soru gerektirir.
+2. **`rules` tablosuyla bağlantı yok** (Faz 4'ten devreden risk) → aşağıdaki Faz 4 bölümüne bakın.
+
+---
+
+## Faz 4 — Rule Engine (hard rule seti tamamlandı)
 
 ### Tamamlanan
 
@@ -23,19 +50,18 @@
 - **`rules` tablosu henüz bağlanmadı.** Migration'da `rule_key`/`rule_type`/`params`/`weight` ile okul bazlı yapılandırılabilir kural fikri var, ama `lib/engine/rules/` şu an sabit/her zaman açık 6 kuralı çalıştırıyor — `rules` tablosundan okuyup hangi kuralların aktif olduğunu/parametrelerini dinamik uygulamak henüz yazılmadı (kullanıcı onayıyla bu turun kapsamı dışında bırakıldı).
 - **Soft rule'lar (ağırlıklı/skorlama) tamamen kapsam dışı** — kullanıcı bu turda sadece hard rule istedi.
 - **Coverage aracı kurulu değil** (`@vitest/coverage-v8` yok, önceden de yoktu) — %90+ hedefi sayısal olarak ölçülemiyor, ama her rule dosyasının her dalı (if/else kolu) testlerle elle kapsandı.
-- **`checkAssignmentEligibility` tek bir teacher×zone×date kombinasyonunu kontrol ediyor**, toplu/aday listesi taraması yapmıyor (örn. "bu tarihte bu bölgeye uygun tüm öğretmenler" gibi bir sorgu yok) — bu, Scheduling Engine'in (atama üretimi) işi, henüz yazılmadı.
 
 ### Test kapsamı
 
 - `lib/engine/`: `rules/` klasörü 30/30, `weekday.js` 3/3 (dal/senaryo bazlı tam kapsam, sayısal ölçüm yok). `schedule.js` testleri değişmedi.
-- `lib/db/`: `eligibility.test.js` 2/2 (gerçek Supabase'e karşı uçtan uca).
-- Tam paket: 59/59 yeşil.
+- `lib/db/`: `eligibility.test.js` (Faz 5'te genişletildi, bkz. yukarısı).
 
 ### Sonraki adım riskleri
 
 1. **`rules` tablosuyla bağlantı yok** → okul bazlı kural aç/kapa veya parametre değişikliği (örn. `max_weekly_duty`) şu an mümkün değil → azaltma: Scheduling Engine öncesi ya da içinde `rules` tablosunu okuyup `checkHardRules`'a aktaran bir katman (muhtemelen `lib/db/rules.js`) yazılmalı.
-2. **Atama üretimi (Scheduling Engine) yok.** `checkAssignmentEligibility` sadece "bu tek kombinasyon uygun mu" sorusuna cevap veriyor — bir tarih aralığı için otomatik program üretmek, rotasyon (haftalık/aylık) uygulamak, `required_count` kadar öğretmen atamak gibi asıl Faz 5 işi henüz başlamadı → büyük mimari kararlar gerektirir (rotasyon algoritması, eşit dağılım mantığı), muhtemelen kendi içinde alt-turlara bölünmeli.
-3. **Coverage sayısal olarak ölçülemiyor** → azaltma: `@vitest/coverage-v8` kurulumu ayrı bir kullanıcı kararı gerektiriyor (yeni bağımlılık), bu turda eklenmedi.
+2. **Coverage sayısal olarak ölçülemiyor** → azaltma: `@vitest/coverage-v8` kurulumu ayrı bir kullanıcı kararı gerektiriyor (yeni bağımlılık), bu turda eklenmedi.
+
+(Atama üretimi/rotasyon riski Faz 5 bölümüne taşındı, yukarısına bakın.)
 
 ---
 
