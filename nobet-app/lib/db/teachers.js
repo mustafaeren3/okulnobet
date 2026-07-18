@@ -11,6 +11,16 @@ export async function getTeachers(supabase, schoolId) {
   return data;
 }
 
+export async function getTeacherById(supabase, teacherId) {
+  const { data, error } = await supabase
+    .from('teachers')
+    .select('*')
+    .eq('id', teacherId)
+    .single();
+  if (error) throw new Error(error.message);
+  return data;
+}
+
 export async function createTeacher(supabase, schoolId, teacher) {
   const { data, error } = await supabase
     .from('teachers')

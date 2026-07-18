@@ -13,24 +13,28 @@
    - `branchMatch.js` — öğretmenin branşı `allowed_branches`/`blocked_branches` ile eşleşmiyorsa atama engellenir; karşılaştırma `lib/text.js`'teki `normalizeTr` ile yapılır (Türkçe ı/İ eşleşmesi güvenli).
 2. **`lib/text.js`** eklendi — `normalizeTr` paylaşılan yardımcı. İkinci somut kullanım ortaya çıktığı için (`branchMatch.js` + zaten var olan `app/(wizard)/teachers/actions.js`'teki teşkilat şeması scraper'ı) YAGNI kuralına uygun olarak çıkarıldı; `actions.js` artık kendi kopyası yerine bunu import ediyor.
 3. **`lib/engine/rules/index.js`** — `checkHardRules(context)`: 6 kuralı birlikte çalıştırıp `{ eligible, violations }` döndüren runner.
-4. Testler: her kural dosyası için en az 1 geçer + 1 eler testi (CLAUDE.md test standardı), `branchMatch` için ayrıca Türkçe büyük/küçük harf regresyon testi (`SINIF` ↔ `sınıf`) — toplam `rules/` 30/30 yeşil. Tam paket 54/54 yeşil.
+4. Testler: her kural dosyası için en az 1 geçer + 1 eler testi (CLAUDE.md test standardı), `branchMatch` için ayrıca Türkçe büyük/küçük harf regresyon testi (`SINIF` ↔ `sınıf`) — toplam `rules/` 30/30 yeşil.
+5. **`lib/db/eligibility.js`** — `checkHardRules`'ı gerçek veriyle çağıran katman (Faz 4'te işaretlenen "Faz 5'in ilk işi" riski karşılandı). `checkAssignmentEligibility(supabase, { teacherId, zoneId, date })`: teacher/zone/unavailableWeekdays/closures/existingAssignmentCountForDate'i paralel (`Promise.all`) çekip saf `checkHardRules`'a aktarıyor. Yeni `lib/db` dosyaları: `zoneClosures.js`, `dutyAssignments.js` (sadece `getAssignmentCountForTeacherDate`, count sorgusu — satırları çekmiyor), `teachers.js`/`dutyZones.js`'e `getTeacherById`/`getDutyZoneById` eklendi.
+6. **`lib/engine/weekday.js`** — `getWeekday(dateStr)`: `'YYYY-MM-DD'` → haftagünü, yerel `new Date(y,m-1,d)` ile (UTC parse'ın bilinen tarih-kayması riskine düşmüyor, bkz. `schedule.js` `mondayOf()` notu). 3/3 test.
+7. `tests/db/eligibility.test.js`: gerçek Supabase'e karşı uçtan uca (DB → lib/engine/rules) 2 senaryo — tamamen uygun öğretmen/bölge, ve hem müsaitlik hem branş ihlali olan bir kombinasyon (ikisinin de `violations`'ta doğru listelendiği doğrulandı). Tam paket 59/59 yeşil.
 
 ### Bilinçli kararlar / teknik borç
 
 - **`rules` tablosu henüz bağlanmadı.** Migration'da `rule_key`/`rule_type`/`params`/`weight` ile okul bazlı yapılandırılabilir kural fikri var, ama `lib/engine/rules/` şu an sabit/her zaman açık 6 kuralı çalıştırıyor — `rules` tablosundan okuyup hangi kuralların aktif olduğunu/parametrelerini dinamik uygulamak henüz yazılmadı (kullanıcı onayıyla bu turun kapsamı dışında bırakıldı).
 - **Soft rule'lar (ağırlıklı/skorlama) tamamen kapsam dışı** — kullanıcı bu turda sadece hard rule istedi.
 - **Coverage aracı kurulu değil** (`@vitest/coverage-v8` yok, önceden de yoktu) — %90+ hedefi sayısal olarak ölçülemiyor, ama her rule dosyasının her dalı (if/else kolu) testlerle elle kapsandı.
-- **`lib/db` entegrasyonu yok.** `checkHardRules`'a veriyi (unavailableWeekdays, closures, existingAssignmentCountForDate) kimin/nasıl topladığı henüz tanımlanmadı — bu, Faz 5'in (Scheduling Engine) işi olacak.
+- **`checkAssignmentEligibility` tek bir teacher×zone×date kombinasyonunu kontrol ediyor**, toplu/aday listesi taraması yapmıyor (örn. "bu tarihte bu bölgeye uygun tüm öğretmenler" gibi bir sorgu yok) — bu, Scheduling Engine'in (atama üretimi) işi, henüz yazılmadı.
 
 ### Test kapsamı
 
-- `lib/engine/`: `rules/` klasörü 30/30 yeşil (dal bazlı tam kapsam, sayısal ölçüm yok). `schedule.js` testleri değişmedi.
-- Tam paket: 54/54 yeşil.
+- `lib/engine/`: `rules/` klasörü 30/30, `weekday.js` 3/3 (dal/senaryo bazlı tam kapsam, sayısal ölçüm yok). `schedule.js` testleri değişmedi.
+- `lib/db/`: `eligibility.test.js` 2/2 (gerçek Supabase'e karşı uçtan uca).
+- Tam paket: 59/59 yeşil.
 
 ### Sonraki adım riskleri
 
-1. **`rules` tablosuyla bağlantı yok** → okul bazlı kural aç/kapa veya parametre değişikliği (örn. `max_weekly_duty`) şu an mümkün değil → azaltma: Faz 5 öncesi ya da Faz 5 içinde `rules` tablosunu okuyup `checkHardRules`'a aktaran bir katman (muhtemelen `lib/db/rules.js`) yazılmalı.
-2. **`checkHardRules`'ı `lib/db`'den gelen gerçek veriyle çağıran bir katman yok** → Faz 5'in ilk işi bu olacak: `duty_assignments`'tan `existingAssignmentCountForDate` hesaplama, `teacher_unavailable_days`'ten `unavailableWeekdays` çekme vb.
+1. **`rules` tablosuyla bağlantı yok** → okul bazlı kural aç/kapa veya parametre değişikliği (örn. `max_weekly_duty`) şu an mümkün değil → azaltma: Scheduling Engine öncesi ya da içinde `rules` tablosunu okuyup `checkHardRules`'a aktaran bir katman (muhtemelen `lib/db/rules.js`) yazılmalı.
+2. **Atama üretimi (Scheduling Engine) yok.** `checkAssignmentEligibility` sadece "bu tek kombinasyon uygun mu" sorusuna cevap veriyor — bir tarih aralığı için otomatik program üretmek, rotasyon (haftalık/aylık) uygulamak, `required_count` kadar öğretmen atamak gibi asıl Faz 5 işi henüz başlamadı → büyük mimari kararlar gerektirir (rotasyon algoritması, eşit dağılım mantığı), muhtemelen kendi içinde alt-turlara bölünmeli.
 3. **Coverage sayısal olarak ölçülemiyor** → azaltma: `@vitest/coverage-v8` kurulumu ayrı bir kullanıcı kararı gerektiriyor (yeni bağımlılık), bu turda eklenmedi.
 
 ---

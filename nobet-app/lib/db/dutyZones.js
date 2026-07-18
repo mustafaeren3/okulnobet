@@ -12,6 +12,16 @@ export async function getDutyZones(supabase, schoolId) {
   return data;
 }
 
+export async function getDutyZoneById(supabase, zoneId) {
+  const { data, error } = await supabase
+    .from('duty_zones')
+    .select('*')
+    .eq('id', zoneId)
+    .single();
+  if (error) throw new Error(error.message);
+  return data;
+}
+
 export async function createDutyZone(supabase, schoolId, zone) {
   const { data, error } = await supabase
     .from('duty_zones')
