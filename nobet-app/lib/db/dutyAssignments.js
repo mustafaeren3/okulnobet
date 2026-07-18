@@ -48,6 +48,31 @@ export async function createAssignments(supabase, schoolId, assignments) {
   return data;
 }
 
+// İdarecinin elle eklediği bir atama — is_manual=true, Scheduling
+// Engine (generateBulkSchedule) bir daha dokunmaz (silme adımı sadece
+// is_manual=false satırları hedefliyor).
+export async function createManualAssignment(supabase, schoolId, { teacherId, zoneId, date, slotKey }) {
+  const { data, error } = await supabase
+    .from('duty_assignments')
+    .insert({
+      school_id: schoolId,
+      teacher_id: teacherId,
+      zone_id: zoneId,
+      duty_date: date,
+      slot_key: slotKey ?? 'full_day',
+      is_manual: true,
+    })
+    .select('id, duty_date, is_manual, teachers(id, full_name), duty_zones(id, name)')
+    .single();
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+export async function deleteAssignment(supabase, assignmentId) {
+  const { error } = await supabase.from('duty_assignments').delete().eq('id', assignmentId);
+  if (error) throw new Error(error.message);
+}
+
 // Bir okulun [startDate, endDate] aralığındaki OTOMATİK (is_manual=false)
 // atamalarını siler. İdarecinin elle düzenlediği (is_manual=true) satırlara
 // dokunmaz. Toplu program üretiminin idempotency stratejisi: yeniden

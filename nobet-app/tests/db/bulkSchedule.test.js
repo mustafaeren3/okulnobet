@@ -108,4 +108,31 @@ describe('lib/db/bulkSchedule — generateBulkSchedule', () => {
     expect(countA + countB).toBe(5);
     expect(Math.abs(countA - countB)).toBeLessThanOrEqual(1);
   }, 30000);
+
+  it('elle önceden doldurulmuş bir gün+bölgeye fazladan otomatik atama eklemez (required_count aşılmaz)', async () => {
+    const school6 = await signUpAndRegisterSchool(client, makeTestUser('bulk-manual', RUN_ID));
+    const manualTeacher = await createTeacher(client, school6, { full_name: 'ZZZ_TENANT_TEST_BULK_MANUAL_T1', branch: 'sınıf' });
+    await createTeacher(client, school6, { full_name: 'ZZZ_TENANT_TEST_BULK_MANUAL_T2', branch: 'sınıf' });
+    const zone = await createDutyZone(client, school6, { name: 'ZZZ_TENANT_TEST_BULK_MANUAL_ZONE', required_count: 1 });
+
+    // 2026-10-06 için elle bir atama zaten var (is_manual=true).
+    const { error } = await client.from('duty_assignments').insert({
+      school_id: school6,
+      teacher_id: manualTeacher.id,
+      zone_id: zone.id,
+      duty_date: '2026-10-06',
+      is_manual: true,
+    });
+    if (error) throw new Error(error.message);
+
+    await generateBulkSchedule(client, { schoolId: school6, startDate: START, endDate: END });
+
+    const rows = await countAssignments(client, zone.id);
+    const oct06Rows = rows.filter((r) => r.duty_date === '2026-10-06');
+    expect(oct06Rows).toHaveLength(1); // required_count=1 zaten elle dolu, motor ikinci bir kişi eklememeli
+    expect(oct06Rows[0].teacher_id).toBe(manualTeacher.id);
+
+    // Diğer hafta içi günler (10-05, 07, 08, 09) hâlâ otomatik dolduruldu.
+    expect(rows).toHaveLength(5);
+  }, 30000);
 });

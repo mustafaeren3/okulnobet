@@ -5,31 +5,96 @@ import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { getWeekday } from '@/lib/engine/weekday';
 import { DAY_TR } from '@/lib/engine/schedule';
-import { runBulkSchedule, fetchScheduleView } from './actions';
+import {
+  runBulkSchedule,
+  fetchScheduleView,
+  fetchTeacherOptions,
+  addManualAssignment,
+  removeAssignment,
+} from './actions';
 import './schedule.css';
 
 // duty_assignments satırlarını (teachers/duty_zones join'li) tarih ×
-// bölge tablosuna indirger.
+// bölge tablosuna indirger. Her hücre, o gün+bölgeye atanmış
+// öğretmen(ler)in listesi (id + ad + is_manual) — düzenleme/silme bu
+// id'ler üzerinden yapılır.
 function buildScheduleTable(rows) {
   const dateSet = new Set();
-  const zoneSet = new Set();
+  const zoneIdByName = new Map();
   const cellMap = {};
 
   for (const row of rows) {
     const date = row.duty_date;
     const zoneName = row.duty_zones?.name ?? '—';
-    const teacherName = row.teachers?.full_name ?? '—';
     dateSet.add(date);
-    zoneSet.add(zoneName);
+    zoneIdByName.set(zoneName, row.duty_zones?.id);
     cellMap[date] ??= {};
-    (cellMap[date][zoneName] ??= []).push(teacherName);
+    (cellMap[date][zoneName] ??= []).push({
+      id: row.id,
+      name: row.teachers?.full_name ?? '—',
+      isManual: row.is_manual,
+    });
   }
 
   return {
     dates: [...dateSet].sort(),
-    zoneNames: [...zoneSet].sort((a, b) => a.localeCompare(b, 'tr')),
+    zoneNames: [...zoneIdByName.keys()].sort((a, b) => a.localeCompare(b, 'tr')),
+    zoneIdByName,
     cellMap,
   };
+}
+
+function ScheduleCell({ date, zoneId, entries, teacherOptions, onRefresh }) {
+  const [adding, setAdding] = useState(false);
+  const [selectedTeacherId, setSelectedTeacherId] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  async function handleRemove(assignmentId) {
+    setBusy(true);
+    const res = await removeAssignment(assignmentId);
+    setBusy(false);
+    if (res.error) { window.alert(res.error); return; }
+    onRefresh();
+  }
+
+  async function handleAdd() {
+    if (!selectedTeacherId) return;
+    setBusy(true);
+    const res = await addManualAssignment({ teacherId: selectedTeacherId, zoneId, date });
+    setBusy(false);
+    if (res.error) { window.alert(res.error); return; }
+    setAdding(false);
+    setSelectedTeacherId('');
+    onRefresh();
+  }
+
+  return (
+    <td>
+      <div className="sched-cell">
+        {entries.map((e) => (
+          <span key={e.id} className="sched-chip">
+            {e.name}
+            {e.isManual && <span title="Elle düzenlendi (kilitli)"> 🔒</span>}
+            <button disabled={busy} onClick={() => handleRemove(e.id)}>×</button>
+          </span>
+        ))}
+        {adding ? (
+          <span className="sched-chip-add">
+            <select value={selectedTeacherId} onChange={(ev) => setSelectedTeacherId(ev.target.value)}>
+              <option value="">Öğretmen seç...</option>
+              {teacherOptions.map((t) => (
+                <option key={t.id} value={t.id}>{t.full_name}</option>
+              ))}
+            </select>
+            <button disabled={busy || !selectedTeacherId} onClick={handleAdd}>✓</button>
+            <button disabled={busy} onClick={() => setAdding(false)}>×</button>
+          </span>
+        ) : (
+          <button className="sched-add-btn" onClick={() => setAdding(true)}>+</button>
+        )}
+      </div>
+    </td>
+  );
 }
 
 export default function ScheduleManager({ schoolName }) {
@@ -42,6 +107,7 @@ export default function ScheduleManager({ schoolName }) {
   const [viewing, setViewing] = useState(false);
   const [result, setResult] = useState(null); // { createdCount } | { error }
   const [rows, setRows] = useState([]);
+  const [teacherOptions, setTeacherOptions] = useState(null); // null = henüz yüklenmedi
 
   const table = useMemo(() => buildScheduleTable(rows), [rows]);
 
@@ -49,6 +115,18 @@ export default function ScheduleManager({ schoolName }) {
     await supabase.auth.signOut();
     router.push('/login');
     router.refresh();
+  }
+
+  async function loadTeacherOptions() {
+    if (teacherOptions) return;
+    const res = await fetchTeacherOptions();
+    if (!res.error) setTeacherOptions(res.teachers);
+  }
+
+  async function refreshView() {
+    if (!startDate || !endDate) return;
+    const res = await fetchScheduleView(startDate, endDate);
+    if (!res.error) setRows(res.rows);
   }
 
   async function handleGenerate() {
@@ -74,6 +152,7 @@ export default function ScheduleManager({ schoolName }) {
     setRunning(false);
     setResult(res);
     setRows(res.rows || []);
+    loadTeacherOptions();
   }
 
   async function handleView() {
@@ -92,6 +171,7 @@ export default function ScheduleManager({ schoolName }) {
     setViewing(false);
     if (res.error) { setResult(res); return; }
     setRows(res.rows);
+    loadTeacherOptions();
   }
 
   return (
@@ -142,6 +222,10 @@ export default function ScheduleManager({ schoolName }) {
       {rows.length > 0 && (
         <div className="sched-card">
           <h3>Program ({table.dates[0]} – {table.dates[table.dates.length - 1]})</h3>
+          <div className="sched-info-box">
+            💡 Her hücrede öğretmen ekleyip çıkarabilirsin. Elle eklediğin atamalar 🔒 ile
+            işaretlenir ve programı yeniden oluşturduğunda silinmez.
+          </div>
           <div style={{ overflowX: 'auto' }}>
             <table className="sched-table">
               <thead>
@@ -157,7 +241,14 @@ export default function ScheduleManager({ schoolName }) {
                     <td>{date}</td>
                     <td>{DAY_TR[getWeekday(date)]}</td>
                     {table.zoneNames.map((z) => (
-                      <td key={z}>{(table.cellMap[date]?.[z] || []).join(', ') || '—'}</td>
+                      <ScheduleCell
+                        key={z}
+                        date={date}
+                        zoneId={table.zoneIdByName.get(z)}
+                        entries={table.cellMap[date]?.[z] || []}
+                        teacherOptions={teacherOptions || []}
+                        onRefresh={refreshView}
+                      />
                     ))}
                   </tr>
                 ))}

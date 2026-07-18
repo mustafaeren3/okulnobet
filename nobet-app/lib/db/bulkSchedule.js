@@ -14,6 +14,7 @@ import {
   deleteAutoAssignmentsInRange,
   createAssignments,
   getTotalAssignmentCounts,
+  getAssignmentsForRange,
 } from './dutyAssignments';
 import { checkHardRules } from '@/lib/engine/rules';
 import { getWeekday } from '@/lib/engine/weekday';
@@ -47,6 +48,23 @@ export async function generateBulkSchedule(supabase, { schoolId, startDate, endD
 
   const calendarByDate = Object.fromEntries(calendarDays.map((c) => [c.calendar_date, c]));
 
+  // Silme adımından sonra aralıkta hâlâ satır varsa bunlar sadece
+  // is_manual=true (elle eklenmiş) olabilir — otomatik olanlar zaten
+  // silindi. Bunları hesaba katmazsak: (a) zaten elle doldurulmuş bir
+  // bölge/güne motor gereğinden fazla öğretmen ekler (required_count
+  // aşılır), (b) o gün elle başka bir bölgeye atanmış bir öğretmen
+  // günlük nöbet limitini aşarak ikinci kez seçilebilir.
+  const existingRows = await getAssignmentsForRange(supabase, schoolId, startDate, endDate);
+  const existingCountByDateZone = {};
+  const existingTeacherIdsByDate = {};
+  for (const row of existingRows) {
+    const date = row.duty_date;
+    const zoneId = row.duty_zones?.id;
+    const teacherId = row.teachers?.id;
+    (existingCountByDateZone[date] ??= {})[zoneId] = (existingCountByDateZone[date]?.[zoneId] || 0) + 1;
+    (existingTeacherIdsByDate[date] ??= {})[teacherId] = (existingTeacherIdsByDate[date]?.[teacherId] || 0) + 1;
+  }
+
   // 3) Gün gün, bölge bölge bellek içi üretim.
   const newAssignments = [];
 
@@ -55,11 +73,16 @@ export async function generateBulkSchedule(supabase, { schoolId, startDate, endD
     if (!isSchedulableDay({ weekday, calendarDay: calendarByDate[date] })) continue;
 
     // Aynı öğretmenin aynı günde farklı bölgelere (double-duty izni
-    // olmadan) atanmasını engellemek için günlük sayaç — checkHardRules'a
-    // her zone denemesinde güncel existingAssignmentCountForDate verir.
-    const dailyCounts = {};
+    // olmadan) atanmasını engellemek için günlük sayaç — elle yapılmış
+    // atamalardan başlar, checkHardRules'a her zone denemesinde güncel
+    // existingAssignmentCountForDate verir.
+    const dailyCounts = { ...(existingTeacherIdsByDate[date] || {}) };
 
     for (const zone of zones) {
+      const alreadyFilled = existingCountByDateZone[date]?.[zone.id] || 0;
+      const remainingSlots = Math.max(0, zone.required_count - alreadyFilled);
+      if (remainingSlots === 0) continue;
+
       const candidates = teachers
         .map((teacher) => ({
           teacher,
@@ -76,7 +99,7 @@ export async function generateBulkSchedule(supabase, { schoolId, startDate, endD
         .filter((c) => c.result.eligible)
         .map((c) => ({ teacher: c.teacher, dutyCount: dutyCountByTeacher[c.teacher.id] || 0 }));
 
-      const selected = selectFairest(candidates, zone.required_count);
+      const selected = selectFairest(candidates, remainingSlots);
 
       for (const s of selected) {
         newAssignments.push({ teacherId: s.teacher.id, zoneId: zone.id, date });
