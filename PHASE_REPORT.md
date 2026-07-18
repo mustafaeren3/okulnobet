@@ -11,24 +11,28 @@
 5. `middleware.js`'e `/teachers/:path*` matcher'ı eklendi (eski `/dashboard/:path*` davranışına dokunulmadı).
 6. `tests/db/teachers-crud.test.js`: `lib/db` katmanının gerçek Supabase'e karşı fonksiyonel doğruluğu (create/update/delete + weekday round-trip) — 4/4 yeşil.
 7. Tarayıcıda uçtan uca elle doğrulandı: kayıt ol → `/teachers` → ONLY modunda öğretmen ekle (Pzt+Çar) → müsaitliği aç, günlerin doğru kaydedildiğini gör → pasifleştir/aktifleştir → sil. Hepsi beklendiği gibi çalıştı.
+8. **Teşkilat şeması otomatik öğretmen çekme** — `/teachers`'a, okulun MEB k12.tr teşkilat şeması sayfasından öğretmen listesini otomatik çeken buton eklendi (eski `(panel)` dashboard'daki `fetchTeskilatOgretmenleri`'nin `teachers` şemasına uyarlanmış hali, `(panel)`'e dokunulmadı). Müdür/müdür yardımcıları/rehber/özel eğitim/anaokulu öğretmenleri filtreleniyor; "1/A SINIF ÖĞRETMENİ" gibi roller `sınıf` branşına indirgeniyor. Gerçek bir okul sitesine (durmusyasario.meb.k12.tr) karşı test edildi: 23 kişi bulundu, 4 hariç tutuldu, 17 doğru branşla eklendi.
+9. **`lib/db/dutyZones.js`** ve **`app/(wizard)/duty-zones/`** — Nöbet Bölgeleri yönetim ekranı: liste, ekle, aktif/pasif, sil; bölge adı, gereken kişi sayısı, öncelik, aktif günler, izinli/yasaklı branş listeleri (virgülle ayrılmış metin → `text[]`). `middleware.js`'e `/duty-zones/:path*` eklendi. `tests/db/duty-zones-crud.test.js`: 4/4 yeşil. Tarayıcıda uçtan uca doğrulandı (ekle → pasifleştir → sil).
 
 ### Bilinçli kararlar / teknik borç
 
-- `teachers` silme işlemi şu an **hard delete** (eski `staff` panelindeki `removePerson` deseniyle tutarlı). `duty_assignments`/`exceptions`/`rotations` üzerindeki `on delete cascade` nedeniyle bir öğretmen silinirse geçmiş nöbet kayıtları da silinir — Faz 5'te gerçek nöbet verisi girilmeye başlanınca bunun yerine `is_active=false` (zaten var) tercih edilmesi gerekebilir, silme UI'dan kaldırılabilir. Şimdilik veri yok, risk düşük.
-- `duty_zones` yönetim ekranı henüz yok — bu fazın kapsamı sadece `teachers` + `teacher_unavailable_days`.
-- Test verisi: `ZZZ_TENANT_TEST_*` (Faz 1/2'den) + yeni `ZZZ_UI_TEST_OKUL` / `zzz-ui-test-*@example.invalid` (bu fazın tarayıcı doğrulamasından) — Dashboard'dan elle temizlenmeli.
+- `teachers` ve `duty_zones` silme işlemi şu an **hard delete** (eski `staff`/`locations` panelindeki desenle tutarlı). `duty_assignments`/`exceptions`/`rotations` üzerindeki `on delete cascade` nedeniyle bir öğretmen silinirse geçmiş nöbet kayıtları da silinir — Faz 5'te gerçek nöbet verisi girilmeye başlanınca bunun yerine `is_active=false` (zaten var) tercih edilmesi gerekebilir, silme UI'dan kaldırılabilir. Şimdilik veri yok, risk düşük.
+- Teşkilat şeması çekme özelliğinde bulunan bir hata düzeltildi: JS regex `/i` bayrağı Türkçe ı/İ eşleşmesini bilmediği için "SINIF" (dotless I) ↔ "sınıf" (dotless ı) case-fold olmuyordu; branş normalizasyonu önce `tr-TR` ile küçük harfe çevirip öyle eşleştirecek şekilde düzeltildi. Aynı tuzak ileride Türkçe metin eşleştiren başka bir yerde (örn. branş adı karşılaştırmaları) tekrar çıkabilir — `normalizeTr` yardımcısı olmadan `/i` bayrağına güvenilmemeli.
+- `duty_zones.allowed_branches`/`blocked_branches` serbest metin girişi (virgülle ayrılmış) — `teachers.branch` ile birebir string eşleşmesi bekleniyor (örn. "sınıf" == "sınıf"), yazım farkı toleransı yok. Faz 4'te Rule Engine bunu okurken bu kısıtı hesaba katmalı.
+- Test verisi: `ZZZ_TENANT_TEST_*` (Faz 1/2'den) + `ZZZ_UI_TEST_OKUL` / `zzz-ui-test-*@example.invalid` (tarayıcı doğrulamalarından) — Dashboard'dan elle temizlenmeli.
 - Migration'ları uygulamak için kullanılan Supabase personal access token hâlâ aktif olabilir — Dashboard → Access Tokens'tan revoke edilmesi öneriliyor.
 
 ### Test kapsamı
 
-- `lib/db/`: `teachers-crud.test.js` 4/4 yeşil (fonksiyonel), `tenant-isolation-phase2.test.js` 11/11 yeşil (RLS).
-- e2e: değişmedi (2/2 yeşil) — `/teachers` için ayrı bir Playwright akışı henüz yok.
-- Tam paket: 23/23 yeşil.
+- `lib/db/`: `teachers-crud.test.js` 4/4, `duty-zones-crud.test.js` 4/4 (fonksiyonel), `tenant-isolation-phase2.test.js` 11/11 (RLS).
+- e2e: değişmedi (2/2 yeşil) — `/teachers` ve `/duty-zones` için ayrı Playwright akışı henüz yok.
+- Tam paket: 27/27 yeşil.
 
 ### Sonraki adım riskleri
 
-1. **`duty_zones` UI'ı yok** — nöbet motoru (Faz 4-5) hem `teachers` hem `duty_zones` okuyacak, ikincisi olmadan uçtan uca akış test edilemez → azaltma: bir sonraki artış `duty_zones` yönetim ekranı olmalı.
+1. **Rule Engine yok** (`lib/engine/rules/`) — `teachers`, `duty_zones`, `teacher_unavailable_days` artık dolduruabiliyor ama bunları okuyup atama üreten bir motor henüz yazılmadı (Faz 4 kapsamı) → azaltma: bir sonraki artış Faz 4'e (kural motoru) geçmeli, veri katmanı artık hazır.
 2. **Hard delete + cascade riski** yukarıda not edildi → azaltma: gerçek nöbet verisi girilmeden önce silme davranışı gözden geçirilecek.
+3. **Branş adı eşleştirmesi serbest metne dayanıyor** (yukarıda not edildi) → azaltma: Rule Engine yazılırken branş karşılaştırması `normalizeTr` ile yapılmalı, tam string eşleşmesine güvenilmemeli.
 
 ---
 
