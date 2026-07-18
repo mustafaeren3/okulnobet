@@ -5,14 +5,11 @@ import { createClient } from '@/lib/supabase/server';
 import { createTeacher, updateTeacher, deleteTeacher, createTeachersBulk, getTeachers } from '@/lib/db/teachers';
 import { getUnavailableWeekdays, setUnavailableWeekdays } from '@/lib/db/teacherAvailability';
 import { requireSchoolId } from '@/lib/db/schoolContext';
+import { normalizeTr } from '@/lib/text';
 
 // Müdür, müdür yardımcıları, rehber/psikolojik danışman, özel eğitim ve
 // anaokulu (okul öncesi) öğretmenleri her zaman dışarıda bırakılır.
 const EXCLUDE_KEYWORDS = ['müdür', 'rehber', 'danışman', 'özel eğitim', 'okul öncesi', 'anaokulu'];
-
-function normalizeTr(s) {
-  return s.toLocaleLowerCase('tr-TR');
-}
 
 function isIncludedRole(role) {
   const norm = normalizeTr(role);

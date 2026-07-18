@@ -3,7 +3,8 @@ import { checkHardRules } from '@/lib/engine/rules/index';
 
 function baseContext(overrides = {}) {
   return {
-    teacher: { restriction_mode: 'ALL', allow_double_duty: false },
+    teacher: { restriction_mode: 'ALL', allow_double_duty: false, is_active: true, branch: 'sınıf' },
+    zone: { is_active: true, active_days: [1, 2, 3, 4, 5], allowed_branches: null, blocked_branches: null },
     unavailableWeekdays: [],
     weekday: 1,
     closures: [],
