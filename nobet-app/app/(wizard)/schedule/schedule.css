@@ -1,0 +1,97 @@
+.sched-root {
+  --bg: #0f1117;
+  --surface: #1a1d27;
+  --border: #2e3350;
+  --accent: #4f7ef7;
+  --danger: #f74f4f;
+  --success: #4ff7a0;
+  --text: #e8ecff;
+  --muted: #7a82a8;
+
+  font-family: 'DM Sans', sans-serif;
+  color: var(--text);
+  min-height: 100vh;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 32px 24px 80px;
+}
+
+.sched-root * { box-sizing: border-box; }
+
+.sched-root header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.sched-root header h1 { font-size: 20px; margin: 0; }
+.sched-root header .school-name { margin-left: auto; font-size: 13px; color: var(--muted); }
+
+.sched-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+.sched-card h3 { margin: 0 0 14px; font-size: 15px; }
+
+.sched-form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.sched-root label {
+  display: block;
+  font-size: 11px;
+  color: var(--muted);
+  margin-bottom: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.sched-root input[type="date"] {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  color: var(--text);
+  font-size: 13px;
+}
+
+.sched-warning {
+  background: rgba(247, 79, 79, 0.08);
+  border: 1px solid var(--danger);
+  border-radius: 10px;
+  padding: 14px;
+  font-size: 12px;
+  color: var(--text);
+  line-height: 1.6;
+  margin-bottom: 16px;
+}
+
+.sched-btn {
+  border: none;
+  border-radius: 8px;
+  padding: 10px 20px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.sched-btn-primary { background: var(--accent); color: #fff; }
+.sched-btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.sched-result {
+  margin-top: 16px;
+  padding: 14px;
+  border-radius: 10px;
+  font-size: 13px;
+  background: rgba(79, 247, 160, 0.08);
+  border: 1px solid var(--success);
+  color: var(--text);
+}
+.sched-result.error {
+  background: rgba(247, 79, 79, 0.08);
+  border-color: var(--danger);
+}
