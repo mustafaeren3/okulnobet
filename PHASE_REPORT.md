@@ -12,23 +12,27 @@
 4. **`lib/engine/selectFairest.js`** — basit adillik seçimi: uygun adaylar arasından o ana kadar toplamda en az nöbet tutmuş olan(lar)ı seçer (`rotations` tablosu tabanlı gerçek rotasyon algoritması kullanıcı onayıyla bilinçli olarak ertelendi). Saf fonksiyon, eşitlikte isim sırasına göre (tr) deterministik seçim. 5/5 test (mutasyon yapmama testi dahil).
 5. **`lib/db/dutyAssignments.js`**: `getTotalAssignmentCounts(supabase, schoolId)` — bir okulun tüm zamanlardaki atamalarını tek sorguda çekip `teacherId → toplam sayı` map'ine indirger (adillik ölçütü için).
 6. **`lib/db/eligibility.js`**: `selectTeachersForZone(supabase, { schoolId, zoneId, date })` — `getEligibleTeachersForZone` + `getTotalAssignmentCounts` + `selectFairest`'i birleştirip `zone.required_count` kadar öğretmen seçer.
-7. `tests/db/eligibility.test.js`'e üçüncü `describe` bloğu: iki uygun aday (biri geçmişte 1 nöbet tutmuş, biri hiç tutmamış), `required_count=1` iken hiç tutmayanın seçildiği gerçek Supabase'e karşı doğrulandı. Tam paket 66/66 yeşil.
+7. `tests/db/eligibility.test.js`'e üçüncü `describe` bloğu: iki uygun aday (biri geçmişte 1 nöbet tutmuş, biri hiç tutmamış), `required_count=1` iken hiç tutmayanın seçildiği gerçek Supabase'e karşı doğrulandı.
+8. **`lib/db/dutyAssignments.js`**: `createAssignments(supabase, schoolId, assignments)` — seçilen atamaları tek sorguda `duty_assignments`'a yazar (`is_manual=false`, motorun ürettiğini belirtir).
+9. **`lib/db/scheduling.js`** (yeni dosya) — `assignTeachersToZone(supabase, { schoolId, zoneId, date })`: `selectTeachersForZone` + `createAssignments`'ı birleştirip seçilen kararı kalıcı olarak kaydeder. Okuma (`eligibility.js`) ve yazma (`scheduling.js`) sorumlulukları bilinçli olarak ayrı dosyalarda tutuldu.
+10. `tests/db/scheduling.test.js`: gerçek Supabase'e karşı 2 senaryo — 3 adaydan `required_count=2` kadarının seçilip DB'ye yazıldığı (dönüş değeri değil, ayrı bir sorguyla tekrar okunarak doğrulandı), ve uygun aday yokken hata fırlatmadan boş dizi döndüğü. Tam paket 68/68 yeşil.
 
 ### Bilinçli kararlar / teknik borç
 
 - **Seçim ölçütü basit adillik (toplam nöbet sayısı), gerçek rotasyon değil.** `rotations` tablosundaki `zone_cursor`/`day_cursor`/`rotation_mode` (haftalık/aylık yer) henüz okunmuyor — kullanıcı onayıyla bu turun kapsamı dışında bırakıldı, ayrı bir ürün kararı gerektiriyor.
+- **`assignTeachersToZone` idempotent değil / "zaten dolu mu" kontrolü yok.** Aynı bölge+tarih için iki kez çağrılırsa, `duty_assignments` unique kısıtı (teacher_id, duty_date, slot_key, zone_id) aynı öğretmenin tekrar atanmasını engeller ama fonksiyon o tarihte zonenin zaten `required_count` kadar dolu olup olmadığını kontrol etmeden yeni adaylar seçmeye çalışır — art arda çağrılırsa gereğinden fazla öğretmen atanabilir. Toplu program üretimi (bir tarih aralığı için tek seferlik çalıştırma) devreye girene kadar risk düşük.
 - **`rules` tablosuyla bağlantı hâlâ yok** (Faz 4'ten devreden risk, aşağıya bakın).
 
 ### Test kapsamı
 
 - `lib/engine/`: `selectFairest.js` 5/5.
-- `lib/db/`: `eligibility.test.js` 5/5 (3 `describe` bloğu: tekil kontrol, toplu tarama, seçim).
-- Tam paket: 66/66 yeşil.
+- `lib/db/`: `eligibility.test.js` 5/5, `scheduling.test.js` 2/2.
+- Tam paket: 68/68 yeşil.
 
 ### Sonraki adım riskleri
 
 1. **Gerçek rotasyon algoritması yok** → basit adillik (toplam nöbet sayısı) çalışıyor ama ürünün istediği "haftalık/aylık yer rotasyonu" (aynı öğretmenin art arda farklı bölgelere geçmesi gibi) henüz yok → azaltma: `rotations` tablosunun nasıl kullanılacağına (cursor ilerletme mantığı) dair ayrı bir ürün kararı + bir sonraki artış.
-2. **Atama kaydetme yok.** `selectTeachersForZone` sadece kimin seçileceğini döndürüyor, seçileni `duty_assignments`'a yazan bir fonksiyon henüz yok → azaltma: bir sonraki artış `lib/db/dutyAssignments.js`'e `createAssignment` eklemeli.
+2. **Toplu program üretimi yok.** `assignTeachersToZone` tek bir bölge+tarih için çalışıyor; bir tarih aralığı + tüm bölgeler için otomatik program üretmek (eski `(panel)` dashboard'daki "PROGRAM OLUŞTUR" butonunun yeni şemadaki karşılığı) henüz yazılmadı → azaltma: bir sonraki artış bunu ele almalı, "zaten dolu mu" idempotency kontrolünü de bu sırada eklemek gerekir.
 3. **`rules` tablosuyla bağlantı yok** (Faz 4'ten devreden risk) → aşağıdaki Faz 4 bölümüne bakın.
 
 ---
