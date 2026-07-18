@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { createTeacher, updateTeacher, deleteTeacher, createTeachersBulk, getTeachers } from '@/lib/db/teachers';
 import { getUnavailableWeekdays, setUnavailableWeekdays } from '@/lib/db/teacherAvailability';
+import { getRotationForTeacher, createRotation, deleteRotation } from '@/lib/db/rotations';
 import { requireSchoolId } from '@/lib/db/schoolContext';
 import { normalizeTr } from '@/lib/text';
 
@@ -175,6 +176,42 @@ export async function saveTeacherAvailability(teacherId, weekdays) {
     const rows = await setUnavailableWeekdays(supabase, schoolId, teacherId, weekdays);
     revalidatePath('/teachers');
     return { rows };
+  } catch (e) {
+    return { error: e.message };
+  }
+}
+
+export async function fetchTeacherRotation(teacherId) {
+  const supabase = createClient();
+  try {
+    await requireSchoolId(supabase);
+    const rotation = await getRotationForTeacher(supabase, teacherId);
+    return { rotation };
+  } catch (e) {
+    return { error: e.message };
+  }
+}
+
+// enabled=true → öğretmeni haftalık yer rotasyonuna dahil eder (cursor
+// 0'dan başlar). enabled=false → rotasyondan çıkarır (rotasyon geçmişi
+// silinir, bir sonraki dahil edilişte 0'dan başlar — bilinçli, basit).
+export async function toggleTeacherRotation(teacherId, enabled) {
+  const supabase = createClient();
+  try {
+    const schoolId = await requireSchoolId(supabase);
+    const existing = await getRotationForTeacher(supabase, teacherId);
+
+    if (enabled && !existing) {
+      const rotation = await createRotation(supabase, schoolId, teacherId, 'haftalik_yer');
+      revalidatePath('/teachers');
+      return { rotation };
+    }
+    if (!enabled && existing) {
+      await deleteRotation(supabase, existing.id);
+      revalidatePath('/teachers');
+      return { rotation: null };
+    }
+    return { rotation: existing };
   } catch (e) {
     return { error: e.message };
   }

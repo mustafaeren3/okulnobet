@@ -10,6 +10,8 @@ import {
   fetchTeacherAvailability,
   saveTeacherAvailability,
   fetchTeskilatOgretmenleri,
+  fetchTeacherRotation,
+  toggleTeacherRotation,
 } from './actions';
 import './teachers.css';
 
@@ -35,6 +37,10 @@ export default function TeachersManager({ schoolId, schoolName, initialTeachers 
   const [expandedId, setExpandedId] = useState(null);
   const [expandedWeekdays, setExpandedWeekdays] = useState([]);
   const [savingAvailability, setSavingAvailability] = useState(false);
+
+  const [rotationExpandedId, setRotationExpandedId] = useState(null);
+  const [rotationInfo, setRotationInfo] = useState(null);
+  const [savingRotation, setSavingRotation] = useState(false);
 
   const [inpName, setInpName] = useState('');
   const [inpBranch, setInpBranch] = useState('');
@@ -147,6 +153,23 @@ export default function TeachersManager({ schoolId, schoolName, initialTeachers 
     showToast('Müsaitlik güncellendi');
   }
 
+  async function toggleRotationExpand(teacher) {
+    if (rotationExpandedId === teacher.id) { setRotationExpandedId(null); return; }
+    setRotationExpandedId(teacher.id);
+    const result = await fetchTeacherRotation(teacher.id);
+    if (result.error) { showToast(result.error, true); return; }
+    setRotationInfo(result.rotation);
+  }
+
+  async function handleToggleRotation(teacher, enabled) {
+    setSavingRotation(true);
+    const result = await toggleTeacherRotation(teacher.id, enabled);
+    setSavingRotation(false);
+    if (result.error) { showToast(result.error, true); return; }
+    setRotationInfo(result.rotation);
+    showToast(enabled ? 'Haftalık yer rotasyonuna dahil edildi' : 'Rotasyondan çıkarıldı');
+  }
+
   return (
     <div className="teach-root">
       <header>
@@ -235,6 +258,9 @@ export default function TeachersManager({ schoolId, schoolName, initialTeachers 
                     <button className="teach-btn teach-btn-outline" onClick={() => toggleExpand(t)}>
                       {expandedId === t.id ? 'Kapat' : 'Müsaitlik'}
                     </button>
+                    <button className="teach-btn teach-btn-outline" onClick={() => toggleRotationExpand(t)}>
+                      {rotationExpandedId === t.id ? 'Kapat' : '🔄 Rotasyon'}
+                    </button>
                     <button className="teach-btn teach-btn-outline" onClick={() => toggleActive(t)}>
                       {t.is_active ? 'Pasifleştir' : 'Aktifleştir'}
                     </button>
@@ -260,6 +286,26 @@ export default function TeachersManager({ schoolId, schoolName, initialTeachers 
                           Kaydet
                         </button>
                       </>
+                    )}
+                  </div>
+                )}
+                {rotationExpandedId === t.id && (
+                  <div className="teach-card" style={{ marginTop: 8, marginBottom: 8 }}>
+                    <label className="teach-checkbox-row" style={{ marginBottom: 0 }}>
+                      <input
+                        type="checkbox"
+                        checked={!!rotationInfo}
+                        onChange={(e) => handleToggleRotation(t, e.target.checked)}
+                        disabled={savingRotation}
+                        style={{ width: 'auto' }}
+                      />
+                      Haftalık yer rotasyonuna dahil et (her hafta sırayla farklı bölgeye atanır)
+                    </label>
+                    {rotationInfo && (
+                      <div style={{ marginTop: 10, fontSize: 12, color: 'var(--muted)' }}>
+                        Şu anki döngü sırası: {rotationInfo.zone_cursor} · Tamamlanan tur: {rotationInfo.cycle_count}
+                        {rotationInfo.last_advanced && <> · Son ilerleme: {rotationInfo.last_advanced}</>}
+                      </div>
                     )}
                   </div>
                 )}
