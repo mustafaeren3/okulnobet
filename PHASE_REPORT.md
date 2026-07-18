@@ -1,6 +1,38 @@
 # PHASE_REPORT.md
 
-## Faz 3 — Öğretmen Yönetimi (devam ediyor)
+## Faz 4 — Rule Engine (sadece hard rule'lar, devam ediyor)
+
+### Tamamlanan
+
+1. **`lib/engine/rules/`** — 3 hard rule, her biri ayrı dosyada (CLAUDE.md kural 5: "yeni kural = yeni dosya"), tamamı saf fonksiyon (DB/Next.js/fetch bilmiyor, düz veri alıp düz veri döndürüyor):
+   - `teacherAvailability.js` — `teacher.restriction_mode` (ALL/ONLY/EXCEPT) + `unavailableWeekdays` listesine göre bir haftagününde müsaitlik.
+   - `zoneClosure.js` — `zone_closures` tarih aralıklarına göre bölge kapalı mı.
+   - `maxDutyPerDay.js` — `allow_double_duty`'e göre günlük maks. nöbet sayısı (false→1, true→2).
+2. **`lib/engine/rules/index.js`** — `checkHardRules(context)`: üç kuralı birlikte çalıştırıp `{ eligible, violations }` döndüren runner.
+3. Testler: her kural dosyası için en az 1 geçer + 1 eler testi (CLAUDE.md test standardı) — `teacherAvailability` 5, `zoneClosure` 4, `maxDutyPerDay` 4, `index` 3 test, toplam 16/16 yeşil. Tam paket 43/43 yeşil.
+
+### Bilinçli kararlar / teknik borç
+
+- **Kapsam bilinçli olarak dar tutuldu** (kullanıcı onayıyla): sadece 3 hard rule. Şunlar bu turun DIŞINDA, henüz kontrol edilmiyor: `teacher.is_active`, `duty_zones.is_active`, `duty_zones.active_days` (bölge o gün açık mı), `duty_zones.allowed_branches`/`blocked_branches` (branş eşleşmesi). `checkHardRules` şu an "bu atama tamamen geçerli mi" sorusuna tam cevap vermiyor — sadece onaylanan 3 kuralı kontrol ediyor, dosya başına yorumla işaretlendi.
+- **`rules` tablosu henüz bağlanmadı.** Migration'da `rule_key`/`rule_type`/`params`/`weight` ile okul bazlı yapılandırılabilir kural fikri var, ama `lib/engine/rules/` şu an sabit/her zaman açık 3 kuralı çalıştırıyor — `rules` tablosundan okuyup hangi kuralların aktif olduğunu/parametrelerini dinamik uygulamak henüz yazılmadı.
+- **Soft rule'lar (ağırlıklı/skorlama) tamamen kapsam dışı** — kullanıcı bu turda sadece hard rule istedi.
+- **Coverage aracı kurulu değil** (`@vitest/coverage-v8` yok, önceden de yoktu) — %90+ hedefi sayısal olarak ölçülemiyor, ama her rule dosyasının her dalı (if/else kolu) testlerle elle kapsandı.
+- **`lib/db` entegrasyonu yok.** `checkHardRules`'a veriyi (unavailableWeekdays, closures, existingAssignmentCountForDate) kimin/nasıl topladığı henüz tanımlanmadı — bu, Faz 5'in (Scheduling Engine) işi olacak.
+
+### Test kapsamı
+
+- `lib/engine/`: yeni `rules/` klasörü 16/16 yeşil (branş bazlı tam dal kapsamı, sayısal ölçüm yok). `schedule.js` testleri değişmedi.
+- Tam paket: 43/43 yeşil.
+
+### Sonraki adım riskleri
+
+1. **`rules` tablosuyla bağlantı yok** → okul bazlı kural aç/kapa veya parametre değişikliği (örn. `max_weekly_duty`) şu an mümkün değil → azaltma: Faz 5 öncesi ya da Faz 5 içinde `rules` tablosunu okuyup `checkHardRules`'a aktaran bir katman (muhtemelen `lib/db/rules.js`) yazılmalı.
+2. **Branş/aktiflik/açık-gün kontrolleri eksik** (yukarıda not edildi) → azaltma: Faz 5'te Scheduling Engine bu kontrolleri de hard rule olarak ekleyecek şekilde genişletilmeli, aksi halde pasif öğretmenlere/kapalı bölgelere atama üretilebilir.
+3. **Coverage sayısal olarak ölçülemiyor** → azaltma: `@vitest/coverage-v8` kurulumu ayrı bir kullanıcı kararı gerektiriyor (yeni bağımlılık), bu turda eklenmedi.
+
+---
+
+## Faz 3 — Öğretmen Yönetimi (tamamlandı)
 
 ### Tamamlanan
 
