@@ -11,7 +11,7 @@
   font-family: 'DM Sans', sans-serif;
   color: var(--text);
   min-height: 100vh;
-  max-width: 720px;
+  max-width: 900px;
   margin: 0 auto;
   padding: 32px 24px 80px;
 }
@@ -81,6 +81,30 @@
 }
 .sched-btn-primary { background: var(--accent); color: #fff; }
 .sched-btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+.sched-btn-outline { background: none; border: 1px solid var(--border); color: var(--text); }
+.sched-btn-outline:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.sched-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.sched-table th,
+.sched-table td {
+  border: 1px solid var(--border);
+  padding: 8px 10px;
+  text-align: left;
+}
+.sched-table th {
+  background: var(--bg);
+  color: var(--muted);
+  text-transform: uppercase;
+  font-size: 10px;
+  letter-spacing: 0.5px;
+}
+
+.sched-empty { color: var(--muted); font-size: 13px; text-align: center; padding: 24px; }
 
 .sched-result {
   margin-top: 16px;

@@ -64,6 +64,21 @@ export async function deleteAutoAssignmentsInRange(supabase, schoolId, startDate
   if (error) throw new Error(error.message);
 }
 
+// Bir okulun [startDate, endDate] aralığındaki atamalarını, öğretmen adı
+// ve bölge adıyla birlikte (join) çeker. Program Görüntüleme ekranı için —
+// idareci "kim hangi gün hangi bölgede" sorusuna cevap alır.
+export async function getAssignmentsForRange(supabase, schoolId, startDate, endDate) {
+  const { data, error } = await supabase
+    .from('duty_assignments')
+    .select('id, duty_date, is_manual, teachers(id, full_name), duty_zones(id, name)')
+    .eq('school_id', schoolId)
+    .gte('duty_date', startDate)
+    .lte('duty_date', endDate)
+    .order('duty_date');
+  if (error) throw new Error(error.message);
+  return data;
+}
+
 // Bir okulun TÜM zamanlardaki atamalarını (tarih filtresi yok) tek
 // sorguda çekip teacherId → toplam atama sayısı eşleşen bir obje
 // döndürür. selectFairest'in "o ana kadar en az nöbet tutan" adillik

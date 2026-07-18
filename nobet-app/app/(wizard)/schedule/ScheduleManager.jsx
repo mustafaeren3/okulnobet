@@ -1,10 +1,36 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
-import { runBulkSchedule } from './actions';
+import { getWeekday } from '@/lib/engine/weekday';
+import { DAY_TR } from '@/lib/engine/schedule';
+import { runBulkSchedule, fetchScheduleView } from './actions';
 import './schedule.css';
+
+// duty_assignments satırlarını (teachers/duty_zones join'li) tarih ×
+// bölge tablosuna indirger.
+function buildScheduleTable(rows) {
+  const dateSet = new Set();
+  const zoneSet = new Set();
+  const cellMap = {};
+
+  for (const row of rows) {
+    const date = row.duty_date;
+    const zoneName = row.duty_zones?.name ?? '—';
+    const teacherName = row.teachers?.full_name ?? '—';
+    dateSet.add(date);
+    zoneSet.add(zoneName);
+    cellMap[date] ??= {};
+    (cellMap[date][zoneName] ??= []).push(teacherName);
+  }
+
+  return {
+    dates: [...dateSet].sort(),
+    zoneNames: [...zoneSet].sort((a, b) => a.localeCompare(b, 'tr')),
+    cellMap,
+  };
+}
 
 export default function ScheduleManager({ schoolName }) {
   const supabase = createClient();
@@ -13,7 +39,11 @@ export default function ScheduleManager({ schoolName }) {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [running, setRunning] = useState(false);
+  const [viewing, setViewing] = useState(false);
   const [result, setResult] = useState(null); // { createdCount } | { error }
+  const [rows, setRows] = useState([]);
+
+  const table = useMemo(() => buildScheduleTable(rows), [rows]);
 
   async function handleLogout() {
     await supabase.auth.signOut();
@@ -43,6 +73,25 @@ export default function ScheduleManager({ schoolName }) {
     const res = await runBulkSchedule(startDate, endDate);
     setRunning(false);
     setResult(res);
+    setRows(res.rows || []);
+  }
+
+  async function handleView() {
+    if (!startDate || !endDate) {
+      setResult({ error: 'Başlangıç ve bitiş tarihi giriniz.' });
+      return;
+    }
+    if (endDate < startDate) {
+      setResult({ error: 'Bitiş tarihi başlangıçtan önce olamaz.' });
+      return;
+    }
+
+    setViewing(true);
+    setResult(null);
+    const res = await fetchScheduleView(startDate, endDate);
+    setViewing(false);
+    if (res.error) { setResult(res); return; }
+    setRows(res.rows);
   }
 
   return (
@@ -74,9 +123,14 @@ export default function ScheduleManager({ schoolName }) {
           ve resmi tatiller otomatik atlanır.
         </div>
 
-        <button className="sched-btn sched-btn-primary" onClick={handleGenerate} disabled={running}>
-          {running ? 'Oluşturuluyor...' : '✨ Program Oluştur'}
-        </button>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button className="sched-btn sched-btn-primary" onClick={handleGenerate} disabled={running || viewing}>
+            {running ? 'Oluşturuluyor...' : '✨ Program Oluştur'}
+          </button>
+          <button className="sched-btn sched-btn-outline" onClick={handleView} disabled={running || viewing}>
+            {viewing ? 'Yükleniyor...' : '👁️ Görüntüle'}
+          </button>
+        </div>
 
         {result && (
           <div className={`sched-result ${result.error ? 'error' : ''}`}>
@@ -84,6 +138,40 @@ export default function ScheduleManager({ schoolName }) {
           </div>
         )}
       </div>
+
+      {rows.length > 0 && (
+        <div className="sched-card">
+          <h3>Program ({table.dates[0]} – {table.dates[table.dates.length - 1]})</h3>
+          <div style={{ overflowX: 'auto' }}>
+            <table className="sched-table">
+              <thead>
+                <tr>
+                  <th>Tarih</th>
+                  <th>Gün</th>
+                  {table.zoneNames.map((z) => <th key={z}>{z}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {table.dates.map((date) => (
+                  <tr key={date}>
+                    <td>{date}</td>
+                    <td>{DAY_TR[getWeekday(date)]}</td>
+                    {table.zoneNames.map((z) => (
+                      <td key={z}>{(table.cellMap[date]?.[z] || []).join(', ') || '—'}</td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {rows.length === 0 && result && !result.error && (
+        <div className="sched-card">
+          <div className="sched-empty">Bu aralıkta atama bulunamadı.</div>
+        </div>
+      )}
     </div>
   );
 }
