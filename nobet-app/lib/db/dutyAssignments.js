@@ -48,6 +48,22 @@ export async function createAssignments(supabase, schoolId, assignments) {
   return data;
 }
 
+// Bir okulun [startDate, endDate] aralığındaki OTOMATİK (is_manual=false)
+// atamalarını siler. İdarecinin elle düzenlediği (is_manual=true) satırlara
+// dokunmaz. Toplu program üretiminin idempotency stratejisi: yeniden
+// üretmeden önce eski otomatik atamaları temizle, elle yapılan
+// düzenlemeleri koru.
+export async function deleteAutoAssignmentsInRange(supabase, schoolId, startDate, endDate) {
+  const { error } = await supabase
+    .from('duty_assignments')
+    .delete()
+    .eq('school_id', schoolId)
+    .eq('is_manual', false)
+    .gte('duty_date', startDate)
+    .lte('duty_date', endDate);
+  if (error) throw new Error(error.message);
+}
+
 // Bir okulun TÜM zamanlardaki atamalarını (tarih filtresi yok) tek
 // sorguda çekip teacherId → toplam atama sayısı eşleşen bir obje
 // döndürür. selectFairest'in "o ana kadar en az nöbet tutan" adillik

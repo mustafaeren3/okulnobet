@@ -15,24 +15,28 @@
 7. `tests/db/eligibility.test.js`'e üçüncü `describe` bloğu: iki uygun aday (biri geçmişte 1 nöbet tutmuş, biri hiç tutmamış), `required_count=1` iken hiç tutmayanın seçildiği gerçek Supabase'e karşı doğrulandı.
 8. **`lib/db/dutyAssignments.js`**: `createAssignments(supabase, schoolId, assignments)` — seçilen atamaları tek sorguda `duty_assignments`'a yazar (`is_manual=false`, motorun ürettiğini belirtir).
 9. **`lib/db/scheduling.js`** (yeni dosya) — `assignTeachersToZone(supabase, { schoolId, zoneId, date })`: `selectTeachersForZone` + `createAssignments`'ı birleştirip seçilen kararı kalıcı olarak kaydeder. Okuma (`eligibility.js`) ve yazma (`scheduling.js`) sorumlulukları bilinçli olarak ayrı dosyalarda tutuldu.
-10. `tests/db/scheduling.test.js`: gerçek Supabase'e karşı 2 senaryo — 3 adaydan `required_count=2` kadarının seçilip DB'ye yazıldığı (dönüş değeri değil, ayrı bir sorguyla tekrar okunarak doğrulandı), ve uygun aday yokken hata fırlatmadan boş dizi döndüğü. Tam paket 68/68 yeşil.
+10. `tests/db/scheduling.test.js`: gerçek Supabase'e karşı 2 senaryo — 3 adaydan `required_count=2` kadarının seçilip DB'ye yazıldığı (dönüş değeri değil, ayrı bir sorguyla tekrar okunarak doğrulandı), ve uygun aday yokken hata fırlatmadan boş dizi döndüğü.
+11. **Toplu program üretimi (Bulk Schedule Runner).** `lib/engine/scheduler.js` (saf): `eachDateStr(start,end)` tarih aralığını güne böler, `isSchedulableDay({weekday, calendarDay})` hafta sonu (0/6) veya `day_type='holiday'` olan günleri eler (`half_day`/`ceremony`/`exam` kullanıcı onayıyla bu turda normal gün sayılır). `lib/db/bulkSchedule.js` (yeni orchestrator): `generateBulkSchedule(supabase, {schoolId, startDate, endDate})` — önce o aralıktaki eski otomatik (`is_manual=false`) atamaları siler (idempotency, elle düzenlenmiş satırlara dokunmaz), sonra TÜM gerekli veriyi (öğretmen/bölge/kapanış/müsaitlik/takvim) bir kez çekip bellek içi `checkHardRules`+`selectFairest` ile gün×bölge döngüsü kurar, günlük sayaç ile aynı öğretmenin aynı gün farklı bölgelere (double-duty izni olmadan) atanmasını engeller, toplam sayaç günler arasında sürekli birikir, sonunda tek toplu `createAssignments` ile yazar. Yeni toplu okuma fonksiyonları: `lib/db/calendarDays.js` (`getCalendarDays`), `lib/db/zoneClosures.js`'e `getZoneClosuresForZones`, `lib/db/dutyAssignments.js`'e `deleteAutoAssignmentsInRange`.
+12. `tests/unit/scheduler.test.js`: 10/10 (tarih üretimi + hafta sonu/tatil filtreleme, DB'siz). `tests/db/bulkSchedule.test.js`: gerçek Supabase'e karşı 5 senaryo — hafta sonu atlama, tatil atlama, tek öğretmen+iki bölgede çift atama olmaması, iki kez çalıştırınca sayının değişmemesi (idempotency), iki öğretmen arasında adil dağılım (fark ≤1). Tam paket 83/83 yeşil.
 
 ### Bilinçli kararlar / teknik borç
 
 - **Seçim ölçütü basit adillik (toplam nöbet sayısı), gerçek rotasyon değil.** `rotations` tablosundaki `zone_cursor`/`day_cursor`/`rotation_mode` (haftalık/aylık yer) henüz okunmuyor — kullanıcı onayıyla bu turun kapsamı dışında bırakıldı, ayrı bir ürün kararı gerektiriyor.
-- **`assignTeachersToZone` idempotent değil / "zaten dolu mu" kontrolü yok.** Aynı bölge+tarih için iki kez çağrılırsa, `duty_assignments` unique kısıtı (teacher_id, duty_date, slot_key, zone_id) aynı öğretmenin tekrar atanmasını engeller ama fonksiyon o tarihte zonenin zaten `required_count` kadar dolu olup olmadığını kontrol etmeden yeni adaylar seçmeye çalışır — art arda çağrılırsa gereğinden fazla öğretmen atanabilir. Toplu program üretimi (bir tarih aralığı için tek seferlik çalıştırma) devreye girene kadar risk düşük.
+- **`calendar_days`'te sadece `holiday` tipi atamayı engelliyor.** `half_day`/`ceremony`/`exam` normal gün gibi işleniyor — kullanıcı onayıyla bilinçli, MEB ilkokullarında bu günlerde de nöbet/görev devam ediyor. İleride bu tiplere özel davranış (örn. yarım günde farklı slot) gerekirse ayrı bir kural dosyası olarak eklenmeli.
+- **Bulk runner'ın idempotency stratejisi yıkıcı bir adımla çalışıyor**: `[startDate, endDate]` aralığındaki TÜM otomatik atamaları siler, sonra yeniden üretir. Elle düzenlenmiş (`is_manual=true`) satırlara dokunmuyor ama bu, aralık içindeki otomatik atamaların "üzerine yazma" değil "sil ve yeniden üret" mantığıyla çalıştığı anlamına geliyor — UI'dan çağrılmadan önce kullanıcıya açık bir onay adımı gösterilmeli (henüz UI yok).
+- **`assignTeachersToZone` (tekil, `lib/db/scheduling.js`) hâlâ idempotent değil** — bu risk sadece toplu runner için (`generateBulkSchedule`, silme adımıyla) çözüldü, tekil fonksiyon için değil. Tekil fonksiyon şu an sadece manuel/tek seferlik düzeltmeler için kullanılıyor, düşük risk.
 - **`rules` tablosuyla bağlantı hâlâ yok** (Faz 4'ten devreden risk, aşağıya bakın).
 
 ### Test kapsamı
 
-- `lib/engine/`: `selectFairest.js` 5/5.
-- `lib/db/`: `eligibility.test.js` 5/5, `scheduling.test.js` 2/2.
-- Tam paket: 68/68 yeşil.
+- `lib/engine/`: `selectFairest.js` 5/5, `scheduler.js` 10/10.
+- `lib/db/`: `eligibility.test.js` 5/5, `scheduling.test.js` 2/2, `bulkSchedule.test.js` 5/5.
+- Tam paket: 83/83 yeşil.
 
 ### Sonraki adım riskleri
 
 1. **Gerçek rotasyon algoritması yok** → basit adillik (toplam nöbet sayısı) çalışıyor ama ürünün istediği "haftalık/aylık yer rotasyonu" (aynı öğretmenin art arda farklı bölgelere geçmesi gibi) henüz yok → azaltma: `rotations` tablosunun nasıl kullanılacağına (cursor ilerletme mantığı) dair ayrı bir ürün kararı + bir sonraki artış.
-2. **Toplu program üretimi yok.** `assignTeachersToZone` tek bir bölge+tarih için çalışıyor; bir tarih aralığı + tüm bölgeler için otomatik program üretmek (eski `(panel)` dashboard'daki "PROGRAM OLUŞTUR" butonunun yeni şemadaki karşılığı) henüz yazılmadı → azaltma: bir sonraki artış bunu ele almalı, "zaten dolu mu" idempotency kontrolünü de bu sırada eklemek gerekir.
+2. **Bulk runner'ı tetikleyen bir UI yok.** `generateBulkSchedule` sadece `lib/db` katmanında, çağıran bir server action/sayfa henüz yok — idareci bunu tetikleyemiyor. Ayrıca yıkıcı silme adımı nedeniyle UI'da açık bir onay diyaloğu gerekecek → azaltma: bir sonraki artış `app/(wizard)/` altında bir "Program Oluştur" ekranı olmalı.
 3. **`rules` tablosuyla bağlantı yok** (Faz 4'ten devreden risk) → aşağıdaki Faz 4 bölümüne bakın.
 
 ---
