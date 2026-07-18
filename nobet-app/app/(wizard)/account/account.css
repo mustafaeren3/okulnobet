@@ -1,0 +1,75 @@
+.account-root {
+  --bg: #0f1117;
+  --surface: #1a1d27;
+  --border: #2e3350;
+  --accent: #4f7ef7;
+  --danger: #f74f4f;
+  --success: #4ff7a0;
+  --text: #e8ecff;
+  --muted: #7a82a8;
+
+  font-family: 'DM Sans', sans-serif;
+  color: var(--text);
+  min-height: 100vh;
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 32px 24px 80px;
+}
+
+.account-root * { box-sizing: border-box; }
+
+.account-root header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.account-root header h1 { font-size: 20px; margin: 0; }
+.account-root header .school-name { margin-left: auto; font-size: 13px; color: var(--muted); }
+
+.account-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+}
+.account-card h3 { margin: 0 0 14px; font-size: 15px; }
+
+.account-status-badge {
+  display: inline-block;
+  background: rgba(79, 247, 160, 0.12);
+  border: 1px solid var(--success);
+  color: var(--success);
+  border-radius: 20px;
+  padding: 6px 16px;
+  font-size: 13px;
+  font-weight: 700;
+}
+.account-status-badge-warn {
+  background: rgba(247, 79, 79, 0.12);
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.account-days { margin-top: 10px; font-size: 13px; color: var(--muted); }
+
+.account-info-box {
+  margin-top: 16px;
+  background: rgba(79, 126, 247, 0.08);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px;
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.account-empty { color: var(--muted); font-size: 13px; }
+
+.account-btn {
+  border-radius: 8px;
+  padding: 10px 20px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}

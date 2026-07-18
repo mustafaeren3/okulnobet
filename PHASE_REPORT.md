@@ -1,6 +1,36 @@
 # PHASE_REPORT.md
 
-## Faz 5 — Scheduling Engine (aday listesi tarama, devam ediyor)
+## Faz 6 — Abonelik (şema + plan durumu, ödeme entegrasyonu yok)
+
+### Tamamlanan
+
+1. **`supabase/migrations/0010_subscriptions.sql`** — Faz 2'de "ayrı bir migration'da (0010) gelecek" diye ertelenmiş, o zamandan beri hiç dokunulmamıştı. `subscriptions` tablosu: `plan_type` ('trial'/'standard' — ikincisi henüz seçilebilir değil, yer tutucu), `status` ('trialing'/'active'/'expired'/'canceled'), `trial_ends_at`, `current_period_end`, `unique(school_id)`. RLS: sadece `select` (kullanıcı kendi planını değiştiremez — gerçek ödeme entegrasyonu gelince ayrı bir `SECURITY DEFINER` fonksiyon insert/update yapacak, bilinçli). `register_school` fonksiyonu `create or replace` ile güncellendi: her yeni okul kaydında otomatik olarak **14 günlük deneme** başlatan bir `subscriptions` satırı da oluşturuyor (0001/0002'deki gibi aynı desen, geriye dönük hiçbir şeyi bozmadı — `tests/db/tenant-isolation.test.js` hâlâ 5/5 yeşil).
+2. **`lib/engine/subscription.js`** (saf) — `getSubscriptionStatus({status, trialEndsAt, currentPeriodEnd, now})`: plan durumunu okunabilir bir özete (`label`, `isUsable`, `daysRemaining`) çevirir. 5/5 test.
+3. **`lib/db/subscriptions.js`** — `getSubscriptionForSchool(schoolId)`. Kasıtlı olarak sadece okuma fonksiyonu var — yazma izni yok (yukarıya bakın).
+4. **`app/(wizard)/account/`** (yeni ekran) — "Hesabım": abonelik durumunu ("Deneme Sürümü", "X gün kaldı") gösterir, ödeme entegrasyonu henüz aktif olmadığını açıkça belirtir (yanlış izlenim vermemek için sahte bir "yükselt" butonu eklenmedi). `middleware.js`'e `/account/:path*` eklendi.
+5. `tests/db/subscriptions.test.js`: gerçek Supabase'e karşı 2 senaryo — yeni kayıt olan bir okulun otomatik 14 günlük deneme aldığı (`trial_ends_at` ~14 gün sonrası, birkaç saniye toleranslı), ve RLS ile başka bir okulun abonelik satırının okunamadığı doğrulandı. Tarayıcıda uçtan uca doğrulandı: yeni kayıt → `/account` → "Deneme Sürümü, 14 gün kaldı" doğru göründü; migration öncesi oluşmuş eski bir okulda (`subscriptions` satırı yok) sayfa çökmeden "Abonelik bilgisi bulunamadı" gösterdi. Tam paket 115/115 yeşil.
+
+### Bilinçli kararlar / teknik borç
+
+- **Gerçek ödeme entegrasyonu yok** (kullanıcı onayıyla, bu turun kapsamı bilinçli olarak sadece şema + plan durumu). Hangi sağlayıcı (iyzico/Stripe/PayTR vb.) kullanılacağı ayrı, büyük bir ürün kararı — ödeme alma, plan aktive etme, iptal/yenileme akışları hiçbiri yok.
+- **Deneme süresi süresi dolunca hiçbir şey engellenmiyor.** `getSubscriptionStatus` `isUsable:false` hesaplıyor ama bunu okuyup uygulamanın geri kalanını kilitleyen bir mekanizma (örn. `/schedule`'da program oluşturmayı engelleme) henüz yok — sadece `/account` ekranında bilgi amaçlı gösteriliyor.
+- **14 günlük deneme süresi bir varsayım**, gerçek bir iş kararı olarak onaylanmadı — kolayca değiştirilebilir (`0010_subscriptions.sql`'deki `interval '14 days'`).
+- **`plan_type='standard'` seçilebilir değil** — şu an sadece şemada yer tutucu, gerçek bir ücretli plan tanımı/satın alma akışı yok.
+
+### Test kapsamı
+
+- `lib/engine/`: `subscription.js` 5/5.
+- `lib/db/`: `subscriptions.test.js` 2/2.
+- Tam paket: 115/115 yeşil.
+
+### Sonraki adım riskleri
+
+1. **Ödeme sağlayıcısı entegrasyonu yok** → deneme süresi dolan bir okul şu an hiçbir şekilde engellenmiyor/yönlendirilmiyor → azaltma: ayrı, büyük bir ürün kararı (sağlayıcı seçimi) + artış gerekiyor.
+2. **Deneme süresi dolunca uygulamayı kısıtlayan bir mekanizma yok** → azaltma: `getSubscriptionStatus().isUsable` middleware veya server action'larda kontrol edilerek devreye sokulabilir.
+
+---
+
+## Faz 5 — Scheduling Engine (motor uçtan uca çalışıyor: kural → rotasyon → yapılandırılabilirlik)
 
 ### Tamamlanan
 
