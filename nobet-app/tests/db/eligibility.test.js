@@ -28,6 +28,7 @@ describe('lib/db/eligibility — checkAssignmentEligibility', () => {
     // 2026-10-06 gerçek takvimde Salı (weekday=2), zone.active_days
     // varsayılanı [1,2,3,4,5] içeriyor.
     const result = await checkAssignmentEligibility(client, {
+      schoolId,
       teacherId: teacher.id,
       zoneId: zone.id,
       date: '2026-10-06',
@@ -51,6 +52,7 @@ describe('lib/db/eligibility — checkAssignmentEligibility', () => {
     });
 
     const result = await checkAssignmentEligibility(client, {
+      schoolId,
       teacherId: teacher.id,
       zoneId: zone.id,
       date: '2026-10-06', // Salı

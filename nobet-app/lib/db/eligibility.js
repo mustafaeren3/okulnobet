@@ -9,28 +9,33 @@ import { getDutyZoneById } from './dutyZones';
 import { getUnavailableWeekdays, getUnavailableWeekdaysForTeachers } from './teacherAvailability';
 import { getZoneClosures } from './zoneClosures';
 import { getAssignmentCountForTeacherDate, getAssignmentCountsForDate, getTotalAssignmentCounts } from './dutyAssignments';
+import { getActiveHardRuleKeys } from './rules';
 import { checkHardRules } from '@/lib/engine/rules';
 import { getWeekday } from '@/lib/engine/weekday';
 import { selectFairest } from '@/lib/engine/selectFairest';
 
-export async function checkAssignmentEligibility(supabase, { teacherId, zoneId, date }) {
-  const [teacher, zone, unavailableWeekdays, closures, existingAssignmentCountForDate] = await Promise.all([
+export async function checkAssignmentEligibility(supabase, { schoolId, teacherId, zoneId, date }) {
+  const [teacher, zone, unavailableWeekdays, closures, existingAssignmentCountForDate, activeRuleKeys] = await Promise.all([
     getTeacherById(supabase, teacherId),
     getDutyZoneById(supabase, zoneId),
     getUnavailableWeekdays(supabase, teacherId),
     getZoneClosures(supabase, zoneId),
     getAssignmentCountForTeacherDate(supabase, teacherId, date),
+    getActiveHardRuleKeys(supabase, schoolId),
   ]);
 
-  return checkHardRules({
-    teacher,
-    zone,
-    unavailableWeekdays,
-    closures,
-    date,
-    weekday: getWeekday(date),
-    existingAssignmentCountForDate,
-  });
+  return checkHardRules(
+    {
+      teacher,
+      zone,
+      unavailableWeekdays,
+      closures,
+      date,
+      weekday: getWeekday(date),
+      existingAssignmentCountForDate,
+    },
+    { activeRuleKeys }
+  );
 }
 
 // Bir bölge+tarih için okuldaki TÜM öğretmenleri tarar, her biri için
@@ -38,10 +43,11 @@ export async function checkAssignmentEligibility(supabase, { teacherId, zoneId, 
 // Engine'in "kimi seçeceğiz" kısmı ayrı bir adım). Öğretmen başına ayrı
 // sorgu atmak yerine 4 toplu sorgu kullanır.
 export async function getEligibleTeachersForZone(supabase, { schoolId, zoneId, date }) {
-  const [zone, teachers, closures] = await Promise.all([
+  const [zone, teachers, closures, activeRuleKeys] = await Promise.all([
     getDutyZoneById(supabase, zoneId),
     getTeachers(supabase, schoolId),
     getZoneClosures(supabase, zoneId),
+    getActiveHardRuleKeys(supabase, schoolId),
   ]);
 
   const teacherIds = teachers.map((t) => t.id);
@@ -53,15 +59,18 @@ export async function getEligibleTeachersForZone(supabase, { schoolId, zoneId, d
   const weekday = getWeekday(date);
 
   return teachers.map((teacher) => {
-    const result = checkHardRules({
-      teacher,
-      zone,
-      unavailableWeekdays: unavailableByTeacher[teacher.id] || [],
-      closures,
-      date,
-      weekday,
-      existingAssignmentCountForDate: assignmentCountsByTeacher[teacher.id] || 0,
-    });
+    const result = checkHardRules(
+      {
+        teacher,
+        zone,
+        unavailableWeekdays: unavailableByTeacher[teacher.id] || [],
+        closures,
+        date,
+        weekday,
+        existingAssignmentCountForDate: assignmentCountsByTeacher[teacher.id] || 0,
+      },
+      { activeRuleKeys }
+    );
     return { teacher, ...result };
   });
 }

@@ -42,4 +42,29 @@ describe('checkHardRules', () => {
     expect(result.eligible).toBe(false);
     expect(result.violations).toHaveLength(3);
   });
+
+  it('activeRuleKeys verilmezse tüm kurallar etkin sayılır (geriye dönük uyumluluk, geçer)', () => {
+    const result = checkHardRules(
+      baseContext({ teacher: { restriction_mode: 'EXCEPT', allow_double_duty: false }, unavailableWeekdays: [1] })
+    );
+    expect(result.eligible).toBe(false); // teacher_availability hâlâ devrede
+  });
+
+  it('activeRuleKeys bir kuralı dışlarsa o kuralın ihlali görmezden gelinir (eler — ihlal olmasına rağmen uygun)', () => {
+    const result = checkHardRules(
+      baseContext({ teacher: { restriction_mode: 'EXCEPT', allow_double_duty: false }, unavailableWeekdays: [1] }),
+      { activeRuleKeys: new Set(['active_status', 'zone_active_day', 'branch_match', 'zone_closure', 'max_duty_per_day']) }
+    );
+    expect(result.eligible).toBe(true);
+    expect(result.violations).toHaveLength(0);
+  });
+
+  it('activeRuleKeys boş Set ise hiçbir kural çalışmaz, her zaman uygun (eler)', () => {
+    const result = checkHardRules(
+      baseContext({ teacher: { is_active: false } }), // normalde active_status'u ihlal eder
+      { activeRuleKeys: new Set() }
+    );
+    expect(result.eligible).toBe(true);
+    expect(result.violations).toHaveLength(0);
+  });
 });

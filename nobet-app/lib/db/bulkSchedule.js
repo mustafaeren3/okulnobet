@@ -21,6 +21,7 @@ import { getUnavailableWeekdaysForTeachers } from './teacherAvailability';
 import { getZoneClosuresForZones } from './zoneClosures';
 import { getCalendarDays } from './calendarDays';
 import { getRotationsByMode, advanceRotation } from './rotations';
+import { getActiveHardRuleKeys } from './rules';
 import {
   deleteAutoAssignmentsInRange,
   createAssignments,
@@ -39,11 +40,12 @@ export async function generateBulkSchedule(supabase, { schoolId, startDate, endD
   await deleteAutoAssignmentsInRange(supabase, schoolId, startDate, endDate);
 
   // 2) Gerekli tüm veriyi bir kez çek.
-  const [allTeachers, allZones, calendarDays, weeklyRotations] = await Promise.all([
+  const [allTeachers, allZones, calendarDays, weeklyRotations, activeRuleKeys] = await Promise.all([
     getTeachers(supabase, schoolId),
     getDutyZones(supabase, schoolId),
     getCalendarDays(supabase, schoolId, startDate, endDate),
     getRotationsByMode(supabase, schoolId, 'haftalik_yer'),
+    getActiveHardRuleKeys(supabase, schoolId),
   ]);
   const teachers = allTeachers.filter((t) => t.is_active);
   const zones = allZones.filter((z) => z.is_active);
@@ -115,15 +117,18 @@ export async function generateBulkSchedule(supabase, { schoolId, startDate, endD
           if ((zoneCounts[zone.id] || 0) >= zone.required_count) continue;
 
           const dailyCounts = ensureDailyCounts(date);
-          const result = checkHardRules({
-            teacher,
-            zone,
-            unavailableWeekdays: unavailableByTeacher[teacher.id] || [],
-            closures: closuresByZone[zone.id] || [],
-            date,
-            weekday: getWeekday(date),
-            existingAssignmentCountForDate: dailyCounts[teacher.id] || 0,
-          });
+          const result = checkHardRules(
+            {
+              teacher,
+              zone,
+              unavailableWeekdays: unavailableByTeacher[teacher.id] || [],
+              closures: closuresByZone[zone.id] || [],
+              date,
+              weekday: getWeekday(date),
+              existingAssignmentCountForDate: dailyCounts[teacher.id] || 0,
+            },
+            { activeRuleKeys }
+          );
           if (!result.eligible) continue;
 
           newAssignments.push({ teacherId: teacher.id, zoneId: zone.id, date });
@@ -161,15 +166,18 @@ export async function generateBulkSchedule(supabase, { schoolId, startDate, endD
       const candidates = teachers
         .map((teacher) => ({
           teacher,
-          result: checkHardRules({
-            teacher,
-            zone,
-            unavailableWeekdays: unavailableByTeacher[teacher.id] || [],
-            closures: closuresByZone[zone.id] || [],
-            date,
-            weekday,
-            existingAssignmentCountForDate: dailyCounts[teacher.id] || 0,
-          }),
+          result: checkHardRules(
+            {
+              teacher,
+              zone,
+              unavailableWeekdays: unavailableByTeacher[teacher.id] || [],
+              closures: closuresByZone[zone.id] || [],
+              date,
+              weekday,
+              existingAssignmentCountForDate: dailyCounts[teacher.id] || 0,
+            },
+            { activeRuleKeys }
+          ),
         }))
         .filter((c) => c.result.eligible)
         .map((c) => ({ teacher: c.teacher, dutyCount: dutyCountByTeacher[c.teacher.id] || 0 }));
