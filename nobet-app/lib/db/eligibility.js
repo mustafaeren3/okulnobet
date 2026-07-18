@@ -8,9 +8,10 @@ import { getTeacherById, getTeachers } from './teachers';
 import { getDutyZoneById } from './dutyZones';
 import { getUnavailableWeekdays, getUnavailableWeekdaysForTeachers } from './teacherAvailability';
 import { getZoneClosures } from './zoneClosures';
-import { getAssignmentCountForTeacherDate, getAssignmentCountsForDate } from './dutyAssignments';
+import { getAssignmentCountForTeacherDate, getAssignmentCountsForDate, getTotalAssignmentCounts } from './dutyAssignments';
 import { checkHardRules } from '@/lib/engine/rules';
 import { getWeekday } from '@/lib/engine/weekday';
+import { selectFairest } from '@/lib/engine/selectFairest';
 
 export async function checkAssignmentEligibility(supabase, { teacherId, zoneId, date }) {
   const [teacher, zone, unavailableWeekdays, closures, existingAssignmentCountForDate] = await Promise.all([
@@ -63,4 +64,22 @@ export async function getEligibleTeachersForZone(supabase, { schoolId, zoneId, d
     });
     return { teacher, ...result };
   });
+}
+
+// Bir bölge+tarih için uygun adaylar arasından zone.required_count kadar
+// öğretmen seçer. Seçim ölçütü: basit adillik — o ana kadar toplamda en
+// az nöbet tutmuş olan(lar). rotations tablosu tabanlı gerçek rotasyon
+// algoritması bilinçli olarak kapsam dışı (PHASE_REPORT.md'de işaretli).
+export async function selectTeachersForZone(supabase, { schoolId, zoneId, date }) {
+  const [zone, results, totalCounts] = await Promise.all([
+    getDutyZoneById(supabase, zoneId),
+    getEligibleTeachersForZone(supabase, { schoolId, zoneId, date }),
+    getTotalAssignmentCounts(supabase, schoolId),
+  ]);
+
+  const candidates = results
+    .filter((r) => r.eligible)
+    .map((r) => ({ teacher: r.teacher, dutyCount: totalCounts[r.teacher.id] || 0 }));
+
+  return selectFairest(candidates, zone.required_count);
 }

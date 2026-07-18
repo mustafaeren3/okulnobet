@@ -3,7 +3,7 @@ import { newClient, makeTestUser, signUpAndRegisterSchool } from './helpers';
 import { createTeacher } from '@/lib/db/teachers';
 import { createDutyZone } from '@/lib/db/dutyZones';
 import { setUnavailableWeekdays } from '@/lib/db/teacherAvailability';
-import { checkAssignmentEligibility, getEligibleTeachersForZone } from '@/lib/db/eligibility';
+import { checkAssignmentEligibility, getEligibleTeachersForZone, selectTeachersForZone } from '@/lib/db/eligibility';
 
 // checkAssignmentEligibility'nin gerçek Supabase verisiyle uçtan uca
 // (DB → lib/engine/rules) doğru çalıştığını kanıtlar.
@@ -98,5 +98,48 @@ describe('lib/db/eligibility — getEligibleTeachersForZone', () => {
     expect(eligibleResult.eligible).toBe(true);
     expect(ineligibleResult.eligible).toBe(false);
     expect(ineligibleResult.violations[0].ruleKey).toBe('teacher_availability');
+  });
+});
+
+describe('lib/db/eligibility — selectTeachersForZone', () => {
+  let client, schoolId, zone, busyTeacher, freeTeacher;
+
+  beforeAll(async () => {
+    client = newClient();
+    schoolId = await signUpAndRegisterSchool(client, makeTestUser('elig-select', RUN_ID));
+
+    busyTeacher = await createTeacher(client, schoolId, {
+      full_name: 'ZZZ_TENANT_TEST_ELIG_SELECT_BUSY',
+      branch: 'sınıf',
+    });
+    freeTeacher = await createTeacher(client, schoolId, {
+      full_name: 'ZZZ_TENANT_TEST_ELIG_SELECT_FREE',
+      branch: 'sınıf',
+    });
+
+    zone = await createDutyZone(client, schoolId, {
+      name: 'ZZZ_TENANT_TEST_ELIG_SELECT_ZONE',
+      required_count: 1,
+    });
+
+    // busyTeacher'ın geçmişte (başka bir tarihte) 1 nöbeti var, freeTeacher'ın hiç yok.
+    const { error } = await client.from('duty_assignments').insert({
+      school_id: schoolId,
+      teacher_id: busyTeacher.id,
+      zone_id: zone.id,
+      duty_date: '2026-09-15',
+    });
+    if (error) throw new Error(`duty_assignment eklenemedi: ${error.message}`);
+  }, 30000);
+
+  it('required_count=1 iken iki uygun aday arasından en az nöbet tutanı seçer', async () => {
+    const selected = await selectTeachersForZone(client, {
+      schoolId,
+      zoneId: zone.id,
+      date: '2026-10-06', // Salı, her ikisi de bu tarihte müsait
+    });
+
+    expect(selected).toHaveLength(1);
+    expect(selected[0].teacher.id).toBe(freeTeacher.id);
   });
 });

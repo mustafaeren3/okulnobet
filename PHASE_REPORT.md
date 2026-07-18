@@ -8,22 +8,28 @@
 2. Performans: öğretmen başına ayrı sorgu atmak yerine 4 toplu sorgu kullanılıyor (`Promise.all` ile paralel) — yeni toplu okuma fonksiyonları:
    - `lib/db/teacherAvailability.js`: `getUnavailableWeekdaysForTeachers(supabase, teacherIds)` — `teacher_unavailable_days`'i `.in('teacher_id', ...)` ile tek sorguda çekip `teacherId → weekday[]` map'ine indirger.
    - `lib/db/dutyAssignments.js`: `getAssignmentCountsForDate(supabase, schoolId, date)` — bir okulun bir tarihteki tüm atamalarını tek sorguda çekip `teacherId → sayı` map'ine indirger.
-3. `tests/db/eligibility.test.js`'e yeni `describe` bloğu: 2 öğretmenli (biri uygun, biri `EXCEPT` kısıtıyla uygun değil) ayrı bir test okulunda tarama — sonuç dizisinin doğru uzunlukta olduğu ve her öğretmenin doğru `eligible`/`violations` aldığı doğrulandı. Tam paket 60/60 yeşil.
+3. `tests/db/eligibility.test.js`'e yeni `describe` bloğu: 2 öğretmenli (biri uygun, biri `EXCEPT` kısıtıyla uygun değil) ayrı bir test okulunda tarama — sonuç dizisinin doğru uzunlukta olduğu ve her öğretmenin doğru `eligible`/`violations` aldığı doğrulandı.
+4. **`lib/engine/selectFairest.js`** — basit adillik seçimi: uygun adaylar arasından o ana kadar toplamda en az nöbet tutmuş olan(lar)ı seçer (`rotations` tablosu tabanlı gerçek rotasyon algoritması kullanıcı onayıyla bilinçli olarak ertelendi). Saf fonksiyon, eşitlikte isim sırasına göre (tr) deterministik seçim. 5/5 test (mutasyon yapmama testi dahil).
+5. **`lib/db/dutyAssignments.js`**: `getTotalAssignmentCounts(supabase, schoolId)` — bir okulun tüm zamanlardaki atamalarını tek sorguda çekip `teacherId → toplam sayı` map'ine indirger (adillik ölçütü için).
+6. **`lib/db/eligibility.js`**: `selectTeachersForZone(supabase, { schoolId, zoneId, date })` — `getEligibleTeachersForZone` + `getTotalAssignmentCounts` + `selectFairest`'i birleştirip `zone.required_count` kadar öğretmen seçer.
+7. `tests/db/eligibility.test.js`'e üçüncü `describe` bloğu: iki uygun aday (biri geçmişte 1 nöbet tutmuş, biri hiç tutmamış), `required_count=1` iken hiç tutmayanın seçildiği gerçek Supabase'e karşı doğrulandı. Tam paket 66/66 yeşil.
 
 ### Bilinçli kararlar / teknik borç
 
-- **Seçim/atama mantığı yok.** `getEligibleTeachersForZone` sadece "kimler uygun" sorusuna cevap veriyor; `required_count` kadar öğretmen seçmek, eşit dağılım/rotasyon uygulamak henüz yazılmadı — bir sonraki artışın konusu.
+- **Seçim ölçütü basit adillik (toplam nöbet sayısı), gerçek rotasyon değil.** `rotations` tablosundaki `zone_cursor`/`day_cursor`/`rotation_mode` (haftalık/aylık yer) henüz okunmuyor — kullanıcı onayıyla bu turun kapsamı dışında bırakıldı, ayrı bir ürün kararı gerektiriyor.
 - **`rules` tablosuyla bağlantı hâlâ yok** (Faz 4'ten devreden risk, aşağıya bakın).
 
 ### Test kapsamı
 
-- `lib/db/`: `eligibility.test.js` toplam 3/3 (1 yeni `describe` bloğu eklendi).
-- Tam paket: 60/60 yeşil.
+- `lib/engine/`: `selectFairest.js` 5/5.
+- `lib/db/`: `eligibility.test.js` 5/5 (3 `describe` bloğu: tekil kontrol, toplu tarama, seçim).
+- Tam paket: 66/66 yeşil.
 
 ### Sonraki adım riskleri
 
-1. **Seçim/rotasyon algoritması yok** → `getEligibleTeachersForZone` bir aday listesi veriyor ama "required_count kadar kimi seçelim" sorusunu cevaplamıyor → azaltma: bir sonraki artış bu seçim mantığını (basit adillik mi, `rotations` tablosundaki cursor mantığı mı) netleştirip yazmalı — büyük bir ürün kararı, ayrı bir soru gerektirir.
-2. **`rules` tablosuyla bağlantı yok** (Faz 4'ten devreden risk) → aşağıdaki Faz 4 bölümüne bakın.
+1. **Gerçek rotasyon algoritması yok** → basit adillik (toplam nöbet sayısı) çalışıyor ama ürünün istediği "haftalık/aylık yer rotasyonu" (aynı öğretmenin art arda farklı bölgelere geçmesi gibi) henüz yok → azaltma: `rotations` tablosunun nasıl kullanılacağına (cursor ilerletme mantığı) dair ayrı bir ürün kararı + bir sonraki artış.
+2. **Atama kaydetme yok.** `selectTeachersForZone` sadece kimin seçileceğini döndürüyor, seçileni `duty_assignments`'a yazan bir fonksiyon henüz yok → azaltma: bir sonraki artış `lib/db/dutyAssignments.js`'e `createAssignment` eklemeli.
+3. **`rules` tablosuyla bağlantı yok** (Faz 4'ten devreden risk) → aşağıdaki Faz 4 bölümüne bakın.
 
 ---
 

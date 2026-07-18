@@ -27,3 +27,19 @@ export async function getAssignmentCountsForDate(supabase, schoolId, date) {
     return map;
   }, {});
 }
+
+// Bir okulun TÜM zamanlardaki atamalarını (tarih filtresi yok) tek
+// sorguda çekip teacherId → toplam atama sayısı eşleşen bir obje
+// döndürür. selectFairest'in "o ana kadar en az nöbet tutan" adillik
+// ölçütü için kullanılır.
+export async function getTotalAssignmentCounts(supabase, schoolId) {
+  const { data, error } = await supabase
+    .from('duty_assignments')
+    .select('teacher_id')
+    .eq('school_id', schoolId);
+  if (error) throw new Error(error.message);
+  return data.reduce((map, row) => {
+    map[row.teacher_id] = (map[row.teacher_id] || 0) + 1;
+    return map;
+  }, {});
+}
