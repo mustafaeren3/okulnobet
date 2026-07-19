@@ -38,10 +38,15 @@ function normalizeBranch(role) {
   return trimmed;
 }
 
-// MEB k12.tr okul siteleri ortak bir şablon kullanır: teşkilat şeması
-// sayfasında her kişi <a href="..." title="ROL">AD SOYAD<br /><span>ROL</a>
-// biçiminde listelenir. Bu yapı ilkokul/ortaokul/lise fark etmeksizin aynı.
-const PERSON_RE = /<a\s+href=["'][^"']*["']\s+title=["']([^"']*)["']>([^<]*)<br\s*\/?>\s*<span>([^<]*)<\/a>/gi;
+// MEB k12.tr okul siteleri en az iki farklı şablon kullanıyor (gerçek
+// okul sitelerinde doğrulandı — tek bir sabit şablona güvenilemez):
+//   1) <a href="..." title="ROL">AD SOYAD<br /><span>ROL</a>  (span/br'lı)
+//   2) <a href='...' title='ROL'>AD SOYAD</a>                  (span/br'sız)
+// Her iki durumda da rol her zaman title özniteliğinde, isim her zaman
+// açılış etiketinden sonraki ilk düz metin — <br>/<span> kısmı varsa
+// (grup 1'in role'ü ile aynı bilgiyi tekrar eder) yok sayılan isteğe
+// bağlı bir grup olarak eşleştirilir.
+const PERSON_RE = /<a\s+href=["'][^"']*["']\s+title=["']([^"']*)["']>([^<]*)(?:<br\s*\/?>\s*<span>[^<]*)?<\/a>/gi;
 
 export async function addTeacher(payload) {
   const supabase = createClient();
