@@ -8,25 +8,27 @@
 2. **`lib/engine/subscription.js`** (saf) — `getSubscriptionStatus({status, trialEndsAt, currentPeriodEnd, now})`: plan durumunu okunabilir bir özete (`label`, `isUsable`, `daysRemaining`) çevirir. 5/5 test.
 3. **`lib/db/subscriptions.js`** — `getSubscriptionForSchool(schoolId)`. Kasıtlı olarak sadece okuma fonksiyonu var — yazma izni yok (yukarıya bakın).
 4. **`app/(wizard)/account/`** (yeni ekran) — "Hesabım": abonelik durumunu ("Deneme Sürümü", "X gün kaldı") gösterir, ödeme entegrasyonu henüz aktif olmadığını açıkça belirtir (yanlış izlenim vermemek için sahte bir "yükselt" butonu eklenmedi). `middleware.js`'e `/account/:path*` eklendi.
-5. `tests/db/subscriptions.test.js`: gerçek Supabase'e karşı 2 senaryo — yeni kayıt olan bir okulun otomatik 14 günlük deneme aldığı (`trial_ends_at` ~14 gün sonrası, birkaç saniye toleranslı), ve RLS ile başka bir okulun abonelik satırının okunamadığı doğrulandı. Tarayıcıda uçtan uca doğrulandı: yeni kayıt → `/account` → "Deneme Sürümü, 14 gün kaldı" doğru göründü; migration öncesi oluşmuş eski bir okulda (`subscriptions` satırı yok) sayfa çökmeden "Abonelik bilgisi bulunamadı" gösterdi. Tam paket 115/115 yeşil.
+5. `tests/db/subscriptions.test.js`: gerçek Supabase'e karşı 2 senaryo — yeni kayıt olan bir okulun otomatik 14 günlük deneme aldığı (`trial_ends_at` ~14 gün sonrası, birkaç saniye toleranslı), ve RLS ile başka bir okulun abonelik satırının okunamadığı doğrulandı. Tarayıcıda uçtan uca doğrulandı: yeni kayıt → `/account` → "Deneme Sürümü, 14 gün kaldı" doğru göründü; migration öncesi oluşmuş eski bir okulda (`subscriptions` satırı yok) sayfa çökmeden "Abonelik bilgisi bulunamadı" gösterdi.
+6. **Deneme süresi kısıtlaması.** `lib/db/subscriptions.js`'e `requireUsableSubscription(schoolId)` eklendi — abonelik yoksa veya `getSubscriptionStatus().isUsable === false` ise hata fırlatır. Savunma amaçlı en derin noktaya kondu: `lib/db/bulkSchedule.js`'in (`generateBulkSchedule`) ve `lib/db/scheduling.js`'in (`assignTeachersToZone`, tekil) en başına — hangi çağıran üzerinden gelirse gelsin atlanamaz. `tests/db/subscriptionGuard.test.js`: 2/2 (geçerli denemede üretim çalışıyor; `subscriptions` tablosunda authenticated için yalnızca `select` izni olduğu için — bilinçli tasarım — kullanıcının kendi aboneliğini güncelleyemediği RLS testiyle doğrulandı). "Engellendi mi" senaryosu otomatik testte kurulamadığından (aynı RLS nedeniyle) Supabase CLI ile servis düzeyinde SQL kullanılarak tarayıcıda uçtan uca doğrulandı: `status='expired'` yapılan bir okulda "Program Oluştur" tıklanınca "Hata: Abonelik durumu: Süresi Doldu. Devam etmek için Hesabım sayfasını kontrol edin." mesajı doğru göründü, hiçbir atama oluşmadı. Tam paket 117/117 yeşil.
 
 ### Bilinçli kararlar / teknik borç
 
 - **Gerçek ödeme entegrasyonu yok** (kullanıcı onayıyla, bu turun kapsamı bilinçli olarak sadece şema + plan durumu). Hangi sağlayıcı (iyzico/Stripe/PayTR vb.) kullanılacağı ayrı, büyük bir ürün kararı — ödeme alma, plan aktive etme, iptal/yenileme akışları hiçbiri yok.
-- **Deneme süresi süresi dolunca hiçbir şey engellenmiyor.** `getSubscriptionStatus` `isUsable:false` hesaplıyor ama bunu okuyup uygulamanın geri kalanını kilitleyen bir mekanizma (örn. `/schedule`'da program oluşturmayı engelleme) henüz yok — sadece `/account` ekranında bilgi amaçlı gösteriliyor.
 - **14 günlük deneme süresi bir varsayım**, gerçek bir iş kararı olarak onaylanmadı — kolayca değiştirilebilir (`0010_subscriptions.sql`'deki `interval '14 days'`).
 - **`plan_type='standard'` seçilebilir değil** — şu an sadece şemada yer tutucu, gerçek bir ücretli plan tanımı/satın alma akışı yok.
+- **Kısıtlama sadece "atama üreten" iki fonksiyonda** (`generateBulkSchedule`, `assignTeachersToZone`) — öğretmen/bölge ekleme, kural ayarları gibi diğer yazma işlemleri deneme süresi dolsa bile çalışmaya devam ediyor. Bilinçli: en değerli/motor işlevini kilitlemek yeterli görüldü, veri girişini kilitlemek deneme sonrası geçişi zorlaştırabilirdi.
+- **UI'da önleyici bir uyarı yok** — idareci sadece "Program Oluştur"a bastığında hatayı görüyor, deneme süresinin bitmek üzere olduğuna dair önceden bir banner/bildirim yok (sadece `/account` sayfasını ziyaret ederse görür).
 
 ### Test kapsamı
 
 - `lib/engine/`: `subscription.js` 5/5.
-- `lib/db/`: `subscriptions.test.js` 2/2.
-- Tam paket: 115/115 yeşil.
+- `lib/db/`: `subscriptions.test.js` 2/2, `subscriptionGuard.test.js` 2/2.
+- Tam paket: 117/117 yeşil.
 
 ### Sonraki adım riskleri
 
-1. **Ödeme sağlayıcısı entegrasyonu yok** → deneme süresi dolan bir okul şu an hiçbir şekilde engellenmiyor/yönlendirilmiyor → azaltma: ayrı, büyük bir ürün kararı (sağlayıcı seçimi) + artış gerekiyor.
-2. **Deneme süresi dolunca uygulamayı kısıtlayan bir mekanizma yok** → azaltma: `getSubscriptionStatus().isUsable` middleware veya server action'larda kontrol edilerek devreye sokulabilir.
+1. **Ödeme sağlayıcısı entegrasyonu yok** → deneme süresi dolan bir okul artık engelleniyor ama gerçek bir ödeme yaparak devam edemiyor (bir çıkmaz sokak) → azaltma: ayrı, büyük bir ürün kararı (sağlayıcı seçimi) + artış gerekiyor.
+2. **Önleyici uyarı/banner yok** → azaltma: `/schedule` veya genel layout'a "deneme süreniz N gün sonra bitiyor" gibi bir uyarı eklenebilir.
 
 ---
 

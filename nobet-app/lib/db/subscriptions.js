@@ -4,6 +4,8 @@
 // (SECURITY DEFINER) tarafından oluşturuluyor, bkz.
 // supabase/migrations/0010_subscriptions.sql.
 
+import { getSubscriptionStatus } from '@/lib/engine/subscription';
+
 export async function getSubscriptionForSchool(supabase, schoolId) {
   const { data, error } = await supabase
     .from('subscriptions')
@@ -12,4 +14,23 @@ export async function getSubscriptionForSchool(supabase, schoolId) {
     .maybeSingle();
   if (error) throw new Error(error.message);
   return data;
+}
+
+// Scheduling Engine'in ücretli/kilit değeri (otomatik program üretimi)
+// bu kontrolün arkasına konur. Savunma amaçlı en derin noktaya kondu
+// (lib/db/bulkSchedule.js'in başı) — hangi çağıran üzerinden gelirse
+// gelsin (UI, ileride başka bir action) atlanamaz.
+export async function requireUsableSubscription(supabase, schoolId) {
+  const subscription = await getSubscriptionForSchool(supabase, schoolId);
+  if (!subscription) {
+    throw new Error('Bu okul için abonelik kaydı bulunamadı. Lütfen destek ile iletişime geçin.');
+  }
+  const status = getSubscriptionStatus({
+    status: subscription.status,
+    trialEndsAt: subscription.trial_ends_at,
+    currentPeriodEnd: subscription.current_period_end,
+  });
+  if (!status.isUsable) {
+    throw new Error(`Abonelik durumu: ${status.label}. Devam etmek için Hesabım sayfasını kontrol edin.`);
+  }
 }

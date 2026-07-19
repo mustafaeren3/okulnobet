@@ -22,6 +22,7 @@ import { getZoneClosuresForZones } from './zoneClosures';
 import { getCalendarDays } from './calendarDays';
 import { getRotationsByMode, advanceRotation } from './rotations';
 import { getActiveHardRuleKeys } from './rules';
+import { requireUsableSubscription } from './subscriptions';
 import {
   deleteAutoAssignmentsInRange,
   createAssignments,
@@ -35,6 +36,10 @@ import { eachDateStr, isSchedulableDay } from '@/lib/engine/scheduler';
 import { groupDatesByWeek, getZoneForCursor } from '@/lib/engine/rotation';
 
 export async function generateBulkSchedule(supabase, { schoolId, startDate, endDate }) {
+  // 0) Deneme süresi dolmuş / aboneliği kullanılamaz okullar program
+  // üretemez. En derin noktada kontrol edilir (savunma amaçlı).
+  await requireUsableSubscription(supabase, schoolId);
+
   // 1) İdempotency: bu aralıktaki eski otomatik atamaları temizle,
   // elle düzenlenmiş (is_manual=true) satırlara dokunma.
   await deleteAutoAssignmentsInRange(supabase, schoolId, startDate, endDate);
