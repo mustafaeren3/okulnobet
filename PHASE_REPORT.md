@@ -1,5 +1,15 @@
 # PHASE_REPORT.md
 
+## Faz 6 sonrası düzeltme — Teşkilat şeması çekme: ikinci MEB şablonu + ölçekleme kararı
+
+Gerçek bir kullanıcının kendi okuluyla (zseilkokulu.meb.k12.tr) canlı test etmesi sırasında bulundu.
+
+- **Bulgu:** MEB k12.tr okul siteleri tek bir sabit HTML şablonu kullanmıyor. Faz 3'te test edilen ilk okulda (durmusyasario.meb.k12.tr) kişiler `<a>AD SOYAD<br/><span>ROL</a>` biçimindeydi; bu kullanıcının okulunda `<a title="ROL">AD SOYAD</a>` — `<br>`/`<span>` hiç yok. Eski regex ikinci şablonda 0 kişi buluyordu.
+- **Düzeltme:** `app/(wizard)/teachers/actions.js`'teki `PERSON_RE`, `<br>`/`<span>` kısmını isteğe bağlı (yok sayılan) bir grup olarak eşleştirecek şekilde genelleştirildi — isim her zaman açılış etiketinden sonraki ilk düz metin, rol her zaman `title` özniteliğinde, iki şablonda da aynı. Her iki gerçek okul sitesine karşı doğrulandı (ham HTML + tarayıcıda uçtan uca): eski şablon 23 kişi (değişmedi), yeni şablon 74 kişi bulundu → 48'i doğru filtrelenip eklendi. Tam paket 117/117 yeşil.
+- **Ölçekleme kararı (kullanıcı onayıyla):** Ürün 1000+ okulda kullanılacak. Merkezi/toplu bir link-çekme mekanizması **istenmedi** — her okul idarecisi kendi hesabına kaydolup kendi teşkilat şeması linkini bir kez girer (mevcut model zaten bunu destekliyor, ek bir mimari değişiklik yapılmadı). **Kalıcı risk:** MEB şablonlarının en az 2 varyantı olduğu şimdi kanıtlandı — 1000+ okul arasında henüz görülmemiş üçüncü bir varyant çıkma ihtimali var. Böyle bir durumda `/teachers` ekranındaki mevcut "elle öğretmen ekle" formu zaten bir yedek yol olarak duruyor, ve hata mesajı ("Bu sitenin yapısı desteklenen şablondan farklı olabilir") idareciyi bilgilendiriyor — ama otomatik çekme o okul için çalışmayacak, yeni şablon görüldükçe regex'in genişletilmesi gerekecek.
+
+---
+
 ## Faz 6 — Abonelik (şema + plan durumu, ödeme entegrasyonu yok)
 
 ### Tamamlanan
