@@ -4,7 +4,6 @@ import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { createTeacher, updateTeacher, deleteTeacher, createTeachersBulk, getTeachers } from '@/lib/db/teachers';
 import { getUnavailableWeekdays, setUnavailableWeekdays } from '@/lib/db/teacherAvailability';
-import { getRotationForTeacher, createRotation, deleteRotation } from '@/lib/db/rotations';
 import { requireSchoolId } from '@/lib/db/schoolContext';
 import { normalizeTr } from '@/lib/text';
 
@@ -53,7 +52,7 @@ export async function addTeacher(payload) {
   try {
     const schoolId = await requireSchoolId(supabase);
     const teacher = await createTeacher(supabase, schoolId, payload);
-    revalidatePath('/teachers');
+    revalidatePath('/dashboard');
     return { teacher };
   } catch (e) {
     return { error: e.message };
@@ -65,7 +64,7 @@ export async function editTeacher(teacherId, patch) {
   try {
     await requireSchoolId(supabase);
     const teacher = await updateTeacher(supabase, teacherId, patch);
-    revalidatePath('/teachers');
+    revalidatePath('/dashboard');
     return { teacher };
   } catch (e) {
     return { error: e.message };
@@ -77,7 +76,7 @@ export async function removeTeacher(teacherId) {
   try {
     await requireSchoolId(supabase);
     await deleteTeacher(supabase, teacherId);
-    revalidatePath('/teachers');
+    revalidatePath('/dashboard');
     return { ok: true };
   } catch (e) {
     return { error: e.message };
@@ -170,7 +169,7 @@ export async function fetchTeskilatOgretmenleri(url) {
     return { error: e.message };
   }
 
-  revalidatePath('/teachers');
+  revalidatePath('/dashboard');
   return { added: inserted, totalFound: found.length, skipped: found.length - inserted.length };
 }
 
@@ -179,45 +178,14 @@ export async function saveTeacherAvailability(teacherId, weekdays) {
   try {
     const schoolId = await requireSchoolId(supabase);
     const rows = await setUnavailableWeekdays(supabase, schoolId, teacherId, weekdays);
-    revalidatePath('/teachers');
+    revalidatePath('/dashboard');
     return { rows };
   } catch (e) {
     return { error: e.message };
   }
 }
 
-export async function fetchTeacherRotation(teacherId) {
-  const supabase = createClient();
-  try {
-    await requireSchoolId(supabase);
-    const rotation = await getRotationForTeacher(supabase, teacherId);
-    return { rotation };
-  } catch (e) {
-    return { error: e.message };
-  }
-}
-
-// enabled=true → öğretmeni haftalık yer rotasyonuna dahil eder (cursor
-// 0'dan başlar). enabled=false → rotasyondan çıkarır (rotasyon geçmişi
-// silinir, bir sonraki dahil edilişte 0'dan başlar — bilinçli, basit).
-export async function toggleTeacherRotation(teacherId, enabled) {
-  const supabase = createClient();
-  try {
-    const schoolId = await requireSchoolId(supabase);
-    const existing = await getRotationForTeacher(supabase, teacherId);
-
-    if (enabled && !existing) {
-      const rotation = await createRotation(supabase, schoolId, teacherId, 'haftalik_yer');
-      revalidatePath('/teachers');
-      return { rotation };
-    }
-    if (!enabled && existing) {
-      await deleteRotation(supabase, existing.id);
-      revalidatePath('/teachers');
-      return { rotation: null };
-    }
-    return { rotation: existing };
-  } catch (e) {
-    return { error: e.message };
-  }
-}
+// Not: eski öğretmen bazlı "rotasyona dahil et / başlangıç bölgesi"
+// action'ları kaldırıldı — rotasyon artık motorun kendisinde, tüm
+// çizelge için otomatik (bkz. lib/db/bulkSchedule.js: haftalık sıralı
+// yer değişimi). İdareci sırayı ilk haftayı elle düzenleyerek belirler.

@@ -2,6 +2,8 @@
 // Supabase'i doğrudan çağırmaz, bu katman üzerinden erişir (CLAUDE.md
 // mimari kural 2).
 
+import { getWeekStart, addDays } from '@/lib/engine/rotation';
+
 export async function getAssignmentCountForTeacherDate(supabase, teacherId, date) {
   const { count, error } = await supabase
     .from('duty_assignments')
@@ -21,6 +23,24 @@ export async function getAssignmentCountsForDate(supabase, schoolId, date) {
     .select('teacher_id')
     .eq('school_id', schoolId)
     .eq('duty_date', date);
+  if (error) throw new Error(error.message);
+  return data.reduce((map, row) => {
+    map[row.teacher_id] = (map[row.teacher_id] || 0) + 1;
+    return map;
+  }, {});
+}
+
+// Bir okulun, verilen tarihin HAFTASINDAKİ (Pzt-Paz) tüm atamalarını
+// teacherId → sayı olarak döndürür — max_duty_per_week hard rule'ının
+// tekil atama yolundaki (eligibility) veri kaynağı.
+export async function getAssignmentCountsForWeek(supabase, schoolId, date) {
+  const weekStart = getWeekStart(date);
+  const { data, error } = await supabase
+    .from('duty_assignments')
+    .select('teacher_id')
+    .eq('school_id', schoolId)
+    .gte('duty_date', weekStart)
+    .lte('duty_date', addDays(weekStart, 6));
   if (error) throw new Error(error.message);
   return data.reduce((map, row) => {
     map[row.teacher_id] = (map[row.teacher_id] || 0) + 1;
@@ -62,7 +82,7 @@ export async function createManualAssignment(supabase, schoolId, { teacherId, zo
       slot_key: slotKey ?? 'full_day',
       is_manual: true,
     })
-    .select('id, duty_date, is_manual, teachers(id, full_name), duty_zones(id, name)')
+    .select('id, duty_date, is_manual, teachers(id, full_name), duty_zones(id, name, priority, created_at)')
     .single();
   if (error) throw new Error(error.message);
   return data;
@@ -95,13 +115,28 @@ export async function deleteAutoAssignmentsInRange(supabase, schoolId, startDate
 export async function getAssignmentsForRange(supabase, schoolId, startDate, endDate) {
   const { data, error } = await supabase
     .from('duty_assignments')
-    .select('id, duty_date, is_manual, teachers(id, full_name), duty_zones(id, name)')
+    .select('id, duty_date, is_manual, teachers(id, full_name), duty_zones(id, name, priority, created_at)')
     .eq('school_id', schoolId)
     .gte('duty_date', startDate)
     .lte('duty_date', endDate)
     .order('duty_date');
   if (error) throw new Error(error.message);
   return data;
+}
+
+// Bir okulun, verilen tarihten ÖNCEKİ en son atama gününü döndürür
+// (yoksa null). Toplu üretimin rotasyon çapası: "DB'deki son üretilmiş
+// hafta/ay hangisi, sıra oradan devam etsin" sorusuna cevap verir.
+export async function getLatestAssignmentDateBefore(supabase, schoolId, dateStr) {
+  const { data, error } = await supabase
+    .from('duty_assignments')
+    .select('duty_date')
+    .eq('school_id', schoolId)
+    .lt('duty_date', dateStr)
+    .order('duty_date', { ascending: false })
+    .limit(1);
+  if (error) throw new Error(error.message);
+  return data[0]?.duty_date ?? null;
 }
 
 // Bir okulun TÜM zamanlardaki atamalarını (tarih filtresi yok) tek

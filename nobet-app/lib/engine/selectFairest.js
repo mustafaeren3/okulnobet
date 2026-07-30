@@ -1,8 +1,7 @@
 // Basit adillik seçimi: uygun adaylar arasından, o ana kadar toplamda
-// en az nöbet tutmuş olanları seçer. rotations tablosundaki
-// zone_cursor/day_cursor tabanlı gerçek rotasyon algoritması bilinçli
-// olarak kapsam dışı (PHASE_REPORT.md'de işaretli, ayrı bir ürün kararı
-// gerektiriyor). Saf fonksiyon.
+// en az nöbet tutmuş olanları seçer. Haftalık sıralı yer değişimi
+// (rotasyon) lib/db/bulkSchedule.js'in işi — burası sadece boş hücre
+// doldurma/tekil seçim için adillik ölçütü. Saf fonksiyon.
 //
 // candidates: [{ teacher, dutyCount }] — dutyCount, o öğretmenin o ana
 // kadarki toplam nöbet sayısı (tarih aralığı çağıran tarafın kararı).

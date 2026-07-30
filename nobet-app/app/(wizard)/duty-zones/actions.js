@@ -10,7 +10,7 @@ export async function addDutyZone(payload) {
   try {
     const schoolId = await requireSchoolId(supabase);
     const zone = await createDutyZone(supabase, schoolId, payload);
-    revalidatePath('/duty-zones');
+    revalidatePath('/dashboard');
     return { zone };
   } catch (e) {
     return { error: e.message };
@@ -22,7 +22,7 @@ export async function editDutyZone(zoneId, patch) {
   try {
     await requireSchoolId(supabase);
     const zone = await updateDutyZone(supabase, zoneId, patch);
-    revalidatePath('/duty-zones');
+    revalidatePath('/dashboard');
     return { zone };
   } catch (e) {
     return { error: e.message };
@@ -34,7 +34,7 @@ export async function removeDutyZone(zoneId) {
   try {
     await requireSchoolId(supabase);
     await deleteDutyZone(supabase, zoneId);
-    revalidatePath('/duty-zones');
+    revalidatePath('/dashboard');
     return { ok: true };
   } catch (e) {
     return { error: e.message };

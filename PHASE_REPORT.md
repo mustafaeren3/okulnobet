@@ -1,5 +1,361 @@
 # PHASE_REPORT.md
 
+## Faz 8.5 — Süper Admin Paneli (platform sahibinin çapraz-okul yönetim ekranı)
+
+Kullanıcı isteği: özet metrikler (aktif okul sayısı, aylık tahmini ciro, bu hafta kaydolan okul), okul yönetim tablosu (deneme uzatma, manuel abonelik tanımlama, hesap dondurma) ve canlı kullanım (hangi okul ne zaman program üretti).
+
+### Mimari karar — neden yeni bir yetki mekanizması gerekti
+
+Bugüne kadar HER RLS politikası `current_school_id()`'ye göre satır bazlı izole ediyordu — bir okul asla başka bir okulu göremiyordu. Süper admin bunun ilk BİLİNÇLİ istisnası. Geniş bir "RLS bypass" politikası yerine (yanlışlıkla her authenticated kullanıcıya sızma riski taşırdı), `register_school`/`trial_registrations` ile AYNI desen kullanıldı: dar kapsamlı SECURITY DEFINER fonksiyonlar, her biri `platform_is_admin()` kontrolünden geçmeden hiçbir şey yapmaz. Program/component'lar `schools`/`subscriptions` tablolarına çapraz-okul sorgusu ATAMAZ — RLS zaten engeller, tüm çapraz-okul erişimi SADECE bu RPC'ler üzerinden.
+
+### Tamamlanan
+
+1. **`0016_super_admin.sql`** (yeni migration): `platform_admins` tablosu (kimin süper admin olduğu — kimse doğrudan okuyup yazamaz, `trial_registrations` ile aynı desen), `subscriptions.status`'a `'frozen'` eklendi (müşterinin kendi iptali olan `'canceled'`'dan farklı — admin kararıyla durdurma), ve 5 SECURITY DEFINER fonksiyon: `platform_is_admin()`, `platform_list_schools()` (tüm okullar + abonelik + öğretmen sayısı + son program üretim zamanı), `platform_extend_trial(school_id, days)`, `platform_set_subscription(...)` (tam manuel override), `platform_freeze_school(school_id)`.
+2. **`lib/engine/platformMetrics.js`** (yeni, saf fonksiyon) — `computePlatformMetrics(schools, now)`: aktif okul sayısı (kullanılabilir abonelik durumuna göre canlı hesaplanır, saklanmaz), bu hafta kaydolan okul sayısı, aylık tahmini ciro (SADECE `status='active'` — gerçekten ödemeli — okullardan, güncel öğretmen sayısına göre `lib/engine/pricing.js` ile aynı kademe mantığıyla). 5 test eklendi.
+3. **`lib/engine/subscription.js`**: `'frozen'` durumu için "Dondurulmuş (Yönetici)" etiketi + `isUsable: false` eklendi — dondurulmuş bir okul artık normal panelinde de (mevcut `requireUsableSubscription` zinciri üzerinden) program oluşturamaz, ekstra kod gerekmedi.
+4. **`app/super-admin/`** (yeni route, `(wizard)`/`(auth)`/`(marketing)` gruplarının dışında — okula bağlı olmak bu sayfa için önemsiz): `page.jsx` (auth + `platform_is_admin` kontrolü, admin değilse `/dashboard`'a yönlendirir — RPC bulunamazsa/hata verirse de GÜVENLİ TARAFTA kalıp erişimi reddeder), `SuperAdminPanel.jsx` (özet kartları, "Canlı Kullanım" listesi, okul tablosu + Deneme Uzat/Abonelik Düzenle/Dondur aksiyonları), `actions.js`. Mevcut `dashboard.css` yeniden kullanıldı (`.dash-root` kapsamlı genel `.card`/`.btn`/`.stat-card` sınıfları) — yeni bir stil dosyası yazılmadı.
+5. **`middleware.js`**: `/super-admin` de `/dashboard` gibi girişsiz erişime kapatıldı (derin "gerçekten admin mi" kontrolü sayfa seviyesinde).
+
+### Bulunan ve düzeltilen hata
+
+İlk halinde `page.jsx`, `isPlatformAdmin()` RPC'sinin fırlattığı hatayı (migration henüz uygulanmadığı için "function not found") YAKALAMIYORDU — bu da sayfayı çökertiyordu (admin olmayan biri için sessizce `/dashboard`'a yönlendirmek yerine). `try/catch` eklenip hata durumunda "admin değil" varsayılacak şekilde düzeltildi — bir admin panelinde hataya karşı doğru varsayılan her zaman ERİŞİMİ REDDETMEK, sessizce izin vermek değil.
+
+### Kullanıcının yapması gerekenler
+
+1. **`0016_super_admin.sql`** migration'ını Supabase SQL Editor'de çalıştır (0012-0015'ten sonra, sırayla).
+2. **Kendini süper admin yap** — migration'dan SONRA, SQL Editor'de kendi hesabının e-postasını kullanarak:
+   ```sql
+   insert into platform_admins (user_id)
+   select id from auth.users where email = 'SENİN_EMAIL_ADRESİN';
+   ```
+3. Bundan sonra `/super-admin` adresine giriş yaptığın hesapla girebilirsin.
+
+### Test kapsamı
+
+`tests/unit/platformMetrics.test.js` (yeni, 5 test) + `tests/unit/subscription.test.js`'e 1 test eklendi (`'frozen'` durumu). `vitest run tests/unit` 93/93 yeşil. Tam build başarıyla derlendi (`/super-admin` route 3.78kB, `ƒ` dinamik). Canlı ortamda: migration henüz uygulanmadığı için admin kontrolü beklenen şekilde başarısız oldu ve düzgünce `/dashboard`'a yönlendirdi (çökme yok) — asıl panel arayüzü (metrik kartları, okul tablosu, aksiyonlar) migration uygulanana kadar canlıda uçtan uca test edilemedi.
+
+---
+
+## Faz 8.4 — Yer kısıtı (yeni hard rule), personel paneli sadeleştirme, dönme düzeni açıklamaları, müdür yardımcısı
+
+Kullanıcı dört ayrı istek getirdi: (1) çalışmayan "Müsaitlik" ve kafa karıştıran "Pasifleştir" butonları kaldırılsın, yerine her öğretmende ayrı "Gün Kısıtı" ve "Yer Kısıtı" butonları olsun (ikisi birlikte işaretlenirse öğretmen hem o güne hem o yere sabitlensin); (2) Dağıtım Ayarları'ndaki 3 dönme düzeni örneklerle açıklansın; (3) "Lokasyonlar" → "Nöbet Yerleri"; (4) resmi çizelgede müdür yardımcısının adı da yazacağı için o bilgi de toplansın.
+
+### Tamamlanan
+
+1. **Yeni hard rule: `teacher_zone_restriction`** — bir öğretmen artık tek bir nöbet yerine sabitlenebilir (`teachers.fixed_zone_id`, yeni migration `0015_teacher_fixed_zone.sql`). Saf fonksiyon [`lib/engine/rules/teacherZoneRestriction.js`](nobet-app/lib/engine/rules/teacherZoneRestriction.js), `checkHardRules` listesine eklendi, `rules` tablosunda aç/kapa edilebilir (diğer hard rule'larla aynı desen). 1 geçer + 1 eler + 1 "kısıt yok" testi eklendi (`tests/unit/rules/teacherZoneRestriction.test.js`).
+2. **`lib/db/bulkSchedule.js`**: kısıtlı/kısıtsız öğretmen ayrımı genişletildi — `restriction_mode !== 'ALL'` VEYA `fixed_zone_id` doluysa öğretmen artık haftalik_yer desenine (gride) hiç katılmıyor, Faz 0'da (mevcut gün-kısıtlı önceliklendirme mekanizması) öncelikli deneniyor. Yer kısıtlı bir öğretmen Faz 0'da TÜM bölgeler için aday gösteriliyor ama yeni rule onu kendi sabit bölgesi dışındaki her bölgede eliyor — bulkSchedule.js'e bölgeye özel ekstra filtreleme kodu YAZILMADI, var olan checkHardRules mekanizması zaten yeterli (minimum diff, mevcut mimariye tam uyum).
+3. **Personel paneli**: "Müsaitlik" (bozuktu — ALL modundaki bir öğretmende sadece "Bu öğretmende gün kısıtı yok" yazan, kısıt TÜRÜNÜ değiştiremeyen bir panel açıyordu) ve "Pasifleştir" butonları kaldırıldı. Yerine her öğretmende **"Gün Kısıtı"** (artık kısıt türünü VE günleri aynı panelden değiştirebiliyor — eski bug düzeldi) ve **"Yer Kısıtı"** (yeni, sabit nöbet yeri seçimi) butonları eklendi. Sabit yeri olan öğretmenler listede 📍 rozetiyle gösteriliyor. Yeni öğretmen ekleme formuna da bir "Yer Kısıtı" seçimi eklendi.
+4. **Dağıtım Ayarları açıklamaları**: seçilen döngüye göre değişen, kullanıcının kendi tarifiyle yazılmış somut örnekli bir açıklama kutusu eklendi (`ROTATION_MODE_DESCRIPTIONS`) — üç modun da nasıl işlediği artık bir örnek üzerinden anlatılıyor.
+5. **"Lokasyonlar" → "Nöbet Yerleri"** — başlık ve istatistik etiketi (kod içindeki `zones`/`duty_zones` isimlendirmesi değişmedi, sadece kullanıcıya görünen metin).
+6. **Müdür Yardımcısı adı** — okul müdürü adıyla aynı desen (`schools.profile` jsonb, bkz. Faz 8.3), Okul Bilgileri kartına ikinci bir alan olarak eklendi. `lib/db/schoolContext.js`'teki `updateSchoolPrincipal` artık genel bir `updateSchoolProfileFields(supabase, schoolId, patch)` fonksiyonuna dönüştürüldü (iki somut kullanım ortaya çıktığı için genelleştirme haklıydı — bkz. CLAUDE.md sadelik kuralları). Resmi Word çıktısındaki tek imza bloğu, ikisi de otomatik dolan iki imza bloğuna çevrildi: sol "Müdür Yardımcısı", sağ "Okul Müdürü".
+
+### Kullanıcının yapması gereken
+
+**`0015_teacher_fixed_zone.sql`** migration'ını Supabase SQL Editor'de çalıştır (0012/0013/0014 gibi, sırayla) — canlıda test edilirken bu olmadan "Yer Kısıtı" kaydedilmeye çalışılınca beklenen hata alındı: *"Could not find the 'fixed_zone_id' column of 'teachers' in the schema cache"*. Migration uygulanmadan bu özellik kullanılamaz.
+
+### Test kapsamı
+
+`tests/unit/rules/teacherZoneRestriction.test.js` (yeni, 3 test) + `vitest run tests/unit` 87/87 yeşil. Tam build başarıyla derlendi. Personel panelindeki yeni "Gün Kısıtı"/"Yer Kısıtı" butonları, dönme düzeni açıklama kutusunun seçime göre değişmesi, "Nöbet Yerleri" başlığı ve Müdür Yardımcısı alanı canlı ortamda uçtan uca doğrulandı (Yer Kısıtı kaydetme, migration eksikliğinden beklenen hatayı — çökmeden, düzgün bir toast ile — verdi).
+
+---
+
+## Faz 8.3 — Resmi nöbet çizelgesi: MEB tarzı düzenlenebilir Word belgesi
+
+Kullanıcı örnek bir belge (EK1: "ÖĞRETMEN NÖBET ÇİZELGESİ") paylaştı — yazdırma çıktısının bu şablona (bölge=satır, gün=sütun, nöbetçi öğretmen görevleri listesi, imza bloğu) uygun, Times New Roman 12 punto, okul müdürü adı otomatik dolu ve **düzenlenebilir** bir Word belgesi olmasını istedi.
+
+### Tamamlanan
+
+1. **`exportHTML()` (Dashboard.jsx) tamamen yeniden yazıldı** — eski çıktı tarih-satır/bölge-sütun'du ve tarayıcı yazdırma diyaloğunu açıyordu; yeni çıktı örnek belgeyle birebir aynı yerleşimde (NÖBET YERİ satır, haftanın günü sütun), her hafta ayrı bir tablo + geçerlilik tarihi satırı, sabit "Nöbetçi Öğretmenin Görevleri" 8 maddelik liste ve sağ altta imza bloğu içeriyor. Times New Roman 12pt.
+2. **Gerçek `.doc` dosyası indiriliyor** (`application/msword` MIME + Word XML namespace'leri) — artık tarayıcı yazdırma penceresi açmıyor, Word'ün doğrudan açıp TAM DÜZENLEYEBİLECEĞİ bir dosya iniyor (ayrı bir docx kütüphanesi gerekmedi — Word, iyi biçimlendirilmiş HTML'i native olarak okur, bu yaygın ve güvenilir bir teknik).
+3. **Okul müdürü adı** artık Ayarlar sekmesinde ayrı bir alan (🏫 Okul Bilgileri kartı) — girilen isim, mevcut `schools.profile` jsonb sütununda saklanıyor (0003'te tam bu amaçla tasarlanmış esnek alan, yeni sütun/migration gerekmedi) ve çıktıdaki imza bloğuna otomatik yazılıyor; boşsa imza satırı boş bırakılıyor (elle imzalanabilir).
+
+### Bulunan ve düzeltilen hata
+
+Canlı ortamda test edilirken müdür adı alanı kaydedilince **"permission denied for table schools"** hatası bulundu — 0011 migration'ı `schools` tablosunda UPDATE'i BİLEREK sadece `rotation_mode` sütununa açmıştı ("okul adı/il/ilçe hâlâ istemciden değiştirilemez" kararı). `profile` sütununa yazma izni yoktu. **`0014_school_principal_grant.sql`** eklendi (`grant update (profile) on public.schools to authenticated`) — satır bazlı RLS politikası zaten 0011'de vardı, sadece sütun izni eksikti.
+
+### Kullanıcının yapması gereken
+
+**`0014_school_principal_grant.sql`** migration'ını Supabase SQL Editor'de çalıştır (0012/0013 gibi) — bu olmadan "Okul Müdürü Adı Soyadı" alanı kaydedilemez, aynı "permission denied" hatasını almaya devam edersin.
+
+### Test kapsamı
+
+UI/export değişikliği; motor/DB testlerinde değişiklik yok, `vitest run tests/unit` 84/84 yeşil, tam build başarıyla derlendi. Müdür adı alanının canlı ortamda kayıt akışı uçtan uca denendi (yukarıdaki permission hatası bu sırada bulundu). Word belge çıktısının kendisi, kullanıcının canlı okul verisini bozabilecek bir program yeniden-üretimi gerektirdiğinden bu turda tarayıcıda ayrıca tetiklenmedi — kod, mevcut `table`/`weeks` veri yapılarını (CSV export'un zaten kullandığı) aynı şekilde tükettiği için üretim derlemesi (`next build`) üzerinden sözdizimi/tip doğrulaması yapıldı.
+
+---
+
+## Faz 8.2 — Okul adı: MEB'den canlı çekilen gerçek il/ilçe/okul kaskadı
+
+Kullanıcı isteği: okul adı serbest metin yerine seçmeli olsun; önce il, sonra o ile bağlı ilçe, sonra o ilçedeki gerçek okul seçilsin; ilkokul/ortaokul/ortaöğretim/lise/fen lisesi dahil tüm okul tipleri listede olsun; ayrıca "Diğer" ve "(Özel Okul)" seçenekleri de bulunsun.
+
+### Tamamlanan
+
+1. **MEB'in canlı okul arama servisi** (`meb.gov.tr/baglantilar/okullar/okullar_ajax.php`) araştırıldı ve doğrulandı — tek istekle bir ilin TÜM okullarını (en büyüğü İstanbul: 3495 kayıt) döndürüyor. 81 il için tek seferlik bir toplama scriptiyle **55.005 okul/kurum** çekildi (uydurma/statik bir liste değil, MEB'in kendi güncel verisi).
+2. **Okul tipi sınıflandırması** isimden regex ile çıkarıldı (ilkokul, ortaokul, imam hatip ortaokulu, lise, anadolu lisesi, fen lisesi, sosyal bilimler lisesi, imam hatip lisesi, mesleki/teknik lise, güzel sanatlar lisesi, spor lisesi, anaokulu, özel eğitim, halk eğitimi, diğer kurum) — Türkçe büyük "İ" harfinin JS regex'in `/i` bayrağıyla eşleşmediği bir hata bulunup düzeltildi (`toLocaleLowerCase('tr')` ile normalize edilerek).
+3. **Veri iki dosyaya ayrıldı**: `lib/data/mebProvinces.json` + `mebProvinceDistricts.js` (küçük, il/ilçe listesi — signup sayfası client bileşenine güvenle import edilir) ve `lib/data/mebSchools.json` + `mebSchoolLookup.js` (büyük, ~3MB okul listesi — SADECE `signup/actions.js` server action'ı içinden okunur, client bundle'ına asla dahil olmaz).
+4. **Kayıt formu üçüncü bir kaskad seviyesi kazandı**: İl → İlçe → Okul. Okul seçilince gerçek MEB verisiyle o ilçedeki tüm okullar (tipi parantez içinde) listelenir; listede "(Özel Okul) — listede yok, kendim yazacağım" ve "Diğer — okulumu listede bulamadım" seçenekleri seçilince serbest metin alanı açılır.
+5. Artık kullanılmayan elle yazılmış `lib/data/turkeyProvinces.js` (81 il, 972 ilçe, statik/tahmini) silindi — ilçe listesi artık MEB'in gerçek verisinden türetildiği için okul listesiyle birebir tutarlı.
+
+### Teknik borç / bilinen sınırlamalar
+
+- MEB verisinde ~30 kayıtlık küçük tutarsızlık bulundu (ör. birkaç eski kayıt "Afyon" ismini kullanıyor, güncel adı "Afyonkarahisar" ile birleştirildi) — geri kalan "Büyükşehir" gibi nadir sözde-ilçe etiketleri (öğretmenevi vb. idari kurumlar, nöbet tutan sınıf öğretmeni olmayan kurumlar) dokunulmadan bırakıldı, kullanıcı deneyimini etkilemiyor.
+- Veri statik bir dosya olarak derlendi (canlı API her kayıt formunda çağrılmıyor) — MEB yeni okul açtıkça/kapattıkça veri güncel kalmaz. İleride bir yenileme scripti (bu script'in aynısı tekrar çalıştırılır) periyodik olarak koşturulabilir; şu an için YAGNI.
+
+### Test kapsamı
+
+Bu tur veri/UI; motor veya DB testlerinde değişiklik yok, `vitest run tests/unit` 84/84 yeşil. Kaskad (il→ilçe→okul, gerçek MEB verisiyle Kırıkkale örneği) ve "Diğer" seçilince serbest metin alanının açılması tarayıcıda uçtan uca doğrulandı.
+
+---
+
+## Faz 8.1 — Kayıt formu iyileştirmeleri + giriş/kayıt tasarımı
+
+Kullanıcı Resend+Supabase e-posta kod entegrasyonunun çalışmadığını bildirdi (kod gelmiyor — bu bir HESAP/AYAR sorunu, kodda düzeltilecek bir şey yok, aşağıda kontrol listesi var). Ayrıca üç somut istek: telefon alanına sadece rakam girilebilsin, İl/İlçe seçmeli (81 il + gerçek ilçeler) olsun, giriş/kayıt sayfaları profesyonel bir SaaS görünümüne kavuşsun.
+
+### Tamamlanan
+
+1. **`lib/data/turkeyProvinces.js`** (yeni, saf veri) — Türkiye'nin 81 ili + 972 ilçesi. Kayıt formunda İl seçilince İlçe listesi o ile göre otomatik güncelleniyor (İl değişince eski İlçe seçimi sıfırlanır, geçersiz kombinasyon oluşmaz).
+2. **Telefon alanı artık sadece rakam kabul ediyor** — yapıştırma/harf/özel karakter girişi anında temizleniyor (`0(555) abc-12` → `05551234567` gibi), en fazla 11 haneyle sınırlı.
+3. **Giriş/Kayıt sayfaları yeniden tasarlandı** (`app/(auth)/auth.css`, yeni) — düz HTML görünümünden, tanıtım sitesiyle aynı koyu tema/yazı tipini (Bebas Neue başlık + DM Sans gövde) paylaşan, ortalanmış kart tasarımına geçildi. Kayıt formunda İl/İlçe artık iki sütunlu bir satırda, e-posta onay kodu adımı ayrı ve belirgin bir "bilgi kutusu" içinde gösteriliyor.
+
+### Kullanıcının kontrol etmesi gerekenler (Resend + Supabase e-posta sorunu)
+
+Kodlar gelmiyorsa şu sırayla kontrol et (en sık nedenden başlayarak):
+
+1. **Resend'de domain doğrulaması yapılmış mı?** Resend, doğrulanmamış bir domain'den e-posta göndermeye izin vermez (sadece hesap sahibinin kendi e-postasına test gönderimi çalışır). Resend Dashboard → Domains → domain'in yanında "Verified" yazmalı; değilse DNS'e SPF/DKIM kayıtlarını eklemen gerekiyor.
+2. **Supabase'de "Enable Custom SMTP" gerçekten açık mı?** Project Settings → Authentication → SMTP Settings — bu ayrı bir anahtar, sadece "Confirm email"i açmak yetmez. Host: `smtp.resend.com`, Port: `465` (SSL) veya `587` (TLS), Username: `resend` (harfiyen bu), Password: Resend API anahtarın (`re_` ile başlar).
+3. **"Sender email" alanı, Resend'de doğrulanmış domain ile aynı mı?** Örn. Resend'de `okulnobet.com` doğrulandıysa, gönderen adres `noreply@okulnobet.com` gibi AYNI domain'den olmalı — farklı bir domain yazarsan gönderim reddedilir.
+4. **E-posta şablonu `{{ .Token }}` içeriyor mu?** Authentication → Email Templates → "Confirm signup" — Supabase'in varsayılan şablonu sadece link (`{{ .ConfirmationURL }}`) gönderir; kod (`{{ .Token }}`) GÖRÜNMÜYORSA e-posta gelse bile içinde kod olmaz.
+5. **Resend Dashboard → Logs'a bak.** Supabase gönderim isteğini Resend'e gerçekten iletmiş mi, iletilmişse ne olmuş (delivered/bounced/failed) — en net teşhis burada.
+6. **Supabase Dashboard → Authentication → Logs'a bak.** signUp çağrısı sırasında SMTP hatası varsa burada görünür (`supabase.auth.signUp()` e-posta gönderimi başarısız olsa bile genelde HATA DÖNDÜRMEZ — kullanıcı oluşur ama e-posta sessizce gitmemiş olabilir, bu yanıltıcı bir davranış).
+
+Bunları kontrol edip hâlâ sorun varsa, Resend Logs'ta veya Supabase Auth Logs'ta gördüğün TAM hata mesajını paylaş — kod tarafında yapılacak bir şey varsa (örn. yanlış çağrı şekli) oradan teşhis ederim.
+
+### Test kapsamı
+
+Bu tur tamamen UI/veri; ilgili DB/motor testlerinde değişiklik yok. Tam paket build başarıyla derlendi, yeni sayfalar (giriş, kayıt — İl/İlçe kaskadı ve telefon filtresi dahil) tarayıcıda uçtan uca doğrulandı.
+
+---
+
+## Faz 8 — Ticari SaaS'a geçiş: performans + fiyatlandırma + deneme kısıtları + tanıtım sitesi
+
+Kullanıcı 4 madde istedi: (1) öğretmen silme 4-5 saniye sürüyor; (2) öğretmen sayısına göre kademeli fiyatlandırma + profesyonel bir SaaS sitesi (Hakkımızda/SSS/Misyon-Vizyon/Gizlilik/3D Secure); (3) deneme sürecinde e-posta+telefon başına tek deneme, e-posta onay kodu; (4) siteyi canlıya alıp linkini paylaşmak istiyor. Madde 2 ve 4'ün bazı parçaları (gerçek ödeme sağlayıcı hesabı, gerçek şirket/yasal bilgisi, hosting/domain) SADECE kullanıcının yapabileceği iş/hukuki kararlar olduğu için önce netleştirildi (bkz. aşağıdaki "Kullanıcının yapması gerekenler").
+
+### Tamamlanan
+
+1. **Performans — eksik index'ler bulundu.** `teachers`, `duty_zones`, `duty_assignments`, `zone_closures`, `exceptions` ve (taban şemada repo dışında kurulmuş) `school_users` tablolarında `school_id`/`teacher_id`/`zone_id` üzerinde HİÇ index yoktu (Postgres foreign key'leri otomatik indexlemez) — her RLS kontrolü ve öğretmen silmedeki cascade taraması sequential scan'e düşüyordu. `0012_performans_indexes.sql`: tüm eksik index'ler eklendi (`CREATE INDEX IF NOT EXISTS`, veri değişikliği yok, güvenli).
+2. **Kademeli fiyatlandırma — canlı hesaplanan, saklanmayan bir kademe.** `lib/engine/pricing.js` (saf): 0-20/21-40/41-60/61+ öğretmen kademeleri, aylık+yıllık TL fiyatları. Kademe DB'ye YAZILMIYOR — okulun GÜNCEL öğretmen sayısına göre her seferinde hesaplanıyor (aksi halde öğretmen sayısı değiştikçe bayatlardı). `Hesabım` sekmesine güncel kademe + iki fiyat gösterimi eklendi.
+3. **Deneme kısıtları.** `0013_pricing_and_trial_limits.sql`: yeni `trial_registrations` tablosu (email+phone, UNIQUE, okul silinse bile KALICI durur) — `register_school` artık `p_phone` alıyor ve bu tabloyu kontrol ederek aynı e-posta/telefonla ikinci bir deneme açılmasını engelliyor. Ayrıca `lib/engine/subscription.js`'e `checkTrialDateRangeAllowed` eklendi: deneme durumundaki bir okul tek "Program Oluştur" çağrısında en fazla ~31 gün üretebilir (`requireUsableSubscription` artık bunu da uyguluyor).
+4. **E-posta onay kodu.** Kayıt akışı iki aşamalıya çevrildi (`app/(auth)/signup/`): (1) bilgiler + telefon toplanır, `auth.signUp()` çağrılır; (2) e-postaya giden 6 haneli kod girilir (`auth.verifyOtp(type:'signup')`), doğrulanınca `register_school` çağrılır. Okul, kod doğrulanmadan OLUŞTURULMAZ. "Kodu tekrar gönder" butonu eklendi.
+5. **Profesyonel tanıtım sitesi.** Yeni `app/(marketing)/` route group + paylaşılan header/footer: `/fiyatlandirma` (aylık/yıllık geçişli, 4 kademe), `/hakkimizda` (misyon+vizyon dahil), `/sss`, `/gizlilik` (KVKK maddeleri), `/kullanim-sartlari`, `/odeme-guvenligi` (3D Secure/PCI-DSS açıklaması). Kök `/` artık gerçek bir açılış sayfası (giriş yapmamışsa) — giriş yapmışsa öncekiyle aynı şekilde `/dashboard`'a yönlendiriyor. Gerçek şirket/yasal bilgi gerektiren yerler kullanıcının tercihiyle `[DOLDURULACAK: ...]` şeklinde AÇIKÇA işaretlendi — yayına almadan önce doldurulmalı.
+
+### Kullanıcının yapması gerekenler (ben yapamam)
+
+- **Migrasyonları uygula:** `0012_performance_indexes.sql` ve `0013_pricing_and_trial_limits.sql` henüz CANLI Supabase projesine uygulanmadı (DB kimlik bilgim yok) — Supabase Dashboard → SQL Editor'e yapıştırıp çalıştırman gerekiyor. Uygulanana kadar kayıt/öğretmen silme gibi işlemler `register_school` hata verir (test ettim, tam olarak bu hatayı alıyorsun: "Could not find the function... p_phone").
+- **Supabase Auth ayarı:** Authentication → Providers → Email → "Confirm email" AÇILMALI; Authentication → Email Templates → "Confirm signup" şablonunda `{{ .Token }}` (6 haneli kod) kullanılmalı — Supabase'in varsayılan şablonu link gönderir, kod değil. Bu AÇILMADAN yeni kayıt akışı e-posta göndermez.
+- **Ödeme sağlayıcı:** PayTR/iyzico'da henüz hesabın yok (senin tercihin) — API entegrasyonu bu turun kapsamı dışında bırakıldı, hesap açılınca haber ver.
+- **Yasal içerik:** Hakkımızda/Gizlilik/Kullanım Şartları/SSS'teki `[DOLDURULACAK]` alanları (şirket unvanı, adres, iletişim e-postası) gerçek bilgilerle doldurulmalı — KVKK gereği sahte/yer tutucu bilgiyle yayına alınmamalı.
+- **Hosting + domain:** Şu an yok (kullanıcı onayıyla) — Vercel (ücretsiz, Next.js için önerilir) + bir domain sağlayıcıdan alan adı satın alınması gerekiyor; bu bir finansal işlem olduğu için benim tarafımdan yapılamaz.
+
+### Test kapsamı
+
+- Yeni birim testler: `pricing.test.js` (6/6, tüm kademe sınırları), `subscription.test.js`'e `checkTrialDateRangeAllowed` testleri eklendi (4 yeni). Saf motor testleri (DB gerektirmeyen) tam paket: 84/84 yeşil.
+- DB testleri ŞU AN kırık (yukarıdaki migrasyon uygulanmadığı için, kodda değil) — `tests/db/helpers.js` yeni `p_phone` parametresini zaten gönderiyor, migrasyon uygulanınca tekrar yeşile dönmesi bekleniyor.
+- Tarayıcıda uçtan uca doğrulandı: `/`, `/fiyatlandirma` (aylık↔yıllık geçiş), `/hakkimizda`, `/sss`, `/gizlilik`, `/kullanim-sartlari`, `/odeme-guvenligi` sayfaları hatasız render oldu; giriş yapmış kullanıcı `/`'ye gidince `/dashboard`'a yönlendirildi; Hesabım sekmesinde güncel öğretmen sayısına göre doğru kademe/fiyat gösterildi; yeni kayıt formunda telefon alanı görünüyor.
+
+### Sonraki adım riskleri
+
+1. **register_school'un imzası değişti** — eski 3 parametreli sürüm migrasyonda DROP edildi; migrasyon uygulanana kadar (ve production'da eski istemci kodu cache'lenmişse geçiş anında) kayıt olma çalışmaz. Kısa bir bakım penceresi gibi düşünülmeli.
+2. **DB testleri şu an "Confirm email" KAPALI varsayımıyla çalışıyor** (bkz. tests/db/helpers.js'in mevcut immediate-session mantığı) — kullanıcı "Confirm email"i AÇARSA, bu test paketi muhtemelen kırılır (signUp artık session döndürmez). O noktada ayrı bir test stratejisi (örn. service-role ile önceden onaylanmış test kullanıcıları) gerekecek.
+3. **Ödeme entegrasyonu tamamen kapsam dışı** — Hesabım'daki "satın al" akışı şu an sadece bilgilendirme; gerçek bir "satın al" butonu, sağlayıcı seçilip API bilgileri verilince ayrı bir turda eklenmeli.
+
+---
+
+## Faz 7.5 — Gün kısıtlı öğretmen hatası + kıtlık önizlemesi + arayüz temizliği
+
+Kullanıcı 4 ayrı konu bildirdi: (1) "sadece çarşamba" gibi gün kısıtlı bir öğretmen her hafta o günü almıyordu; (2) Öğretmen formundaki "Kapasite" alanının ne işe yaradığı belirsizdi; (3) Bölge formundaki "Öncelik" alanının rotasyonu nasıl etkilediği belirsizdi; (4) öğretmen sayısı yetersiz olduğunda hangi yer/günün boş kalacağının PROGRAM OLUŞTURMADAN ÖNCE sorulması istendi.
+
+### Tamamlanan
+
+1. **Gün kısıtlı öğretmen hatası — gerçek kök neden bulundu.** `haftalik_yer`'in gün-öncelikli tek döngüsü TÜM öğretmenleri aynı şekilde ilerletiyor: bir öğretmen desene (grid) katılırsa, bölge listesi bitince günü de değişiyor. Sadece Çarşamba çalışabilen bir öğretmen desene katılırsa, döngü onu er ya da geç MÜSAİT OLMADIĞI bir güne kaydırıyordu — orada kalıcı olarak elenip döngü tekrar Çarşamba'ya gelene kadar (haftalarca) hiç atanamıyordu. **Düzeltme (`lib/db/bulkSchedule.js`):** Gün kısıtlı öğretmenler (`restriction_mode !== 'ALL'`) artık ASLA desene katılmıyor (Faz B'nin "desene katıl" mantığından ve çapa/geriye-bakış yeniden inşasından hariç tutuldular). Bunun yerine yeni bir **Faz 0** eklendi: her hafta, normal desenden (Faz A) ÖNCE, gün kısıtlı öğretmenler kendi müsait oldukları günde ÖNCELİKLİ olarak denenir (aralarında adillikle). Böylece "tek gün çalışabilen" biri o günün kıt alternatiflerinden biri olduğu için neredeyse her zaman seçilir, ve deseni asla bozmaz.
+2. **Kıtlık önizlemesi — "Program Oluştur"dan ÖNCE sor.** `generateBulkSchedule`'a `dryRun` parametresi eklendi: DB'ye hiç yazma/silme yapmadan aynı motoru çalıştırıp hangi (gün, bölge) hücrelerinin öğretmen yetersizliğinden BOŞ kalacağını (`emptySlots`) döner. Yeni `previewBulkSchedule` server action'ı bunu çağırır. `Dashboard.jsx`'teki "Program Oluştur" akışı artık ÖNCE bu önizlemeyi çalıştırıyor; boş kalacak yer varsa mevcut onay penceresine ("bu aralık silinip yeniden üretilecek") bunların tam listesi (tarih, gün, bölge, eksik kişi sayısı) ekleniyor — idareci "Devam et" derse gerçek üretim yapılır, "Vazgeç" derse hiçbir şey değişmez.
+3. **"Kapasite" alanı kaldırıldı.** `weekly_capacity` sütunu hiçbir hard rule veya motor tarafından hiç okunmuyordu (sadece DB'de saklanıp gösteriliyordu) — kullanıcının "işe yaramıyorsa kaldıralım" isteğiyle Öğretmen formundan tamamen çıkarıldı. DB sütunu düşürülmedi (bilinçli — Faz 6'daki eski tablo temizliği kararıyla tutarlı, ayrı bir temizlik migration'ına bırakıldı).
+4. **"Öncelik" alanına açıklama + görünür sıra numarası.** Lokasyonlar kartına rotasyonun tam olarak nasıl çalıştığını anlatan bir bilgi kutusu eklendi (öncelik DESC, sonra eklenme tarihi; 0 bırakılırsa eklenme sırası geçerli). Bölge listesi artık motorun kullandığı GERÇEK sırayla gösteriliyor ve her bölgenin yanında "Sıra #N" rozeti var — kullanıcı arayüzden doğrudan "sıradaki bölge bu" diye görebiliyor.
+
+### Test kapsamı
+
+- Yeni DB testi: `gün kısıtlı (sadece belirli gün) öğretmen HER hafta kendi gününü alır, desene katılıp kaybolmaz` — 3 hafta boyunca sadece Çarşamba çalışabilen bir öğretmenin üç Çarşamba'nın (10-07, 10-14, 10-21) HEPSİNİ aldığı doğrulanıyor.
+- Tam paket: 131/131 yeşil.
+- Tarayıcıda uçtan uca doğrulandı: "Sadece seçili günler" + Çarşamba işaretli bir öğretmen eklendi, 3 haftalık program üretildi — üç Çarşamba da doğru öğretmene atandı. "Program Oluştur"a basılınca (öğretmen sayısı kıt olduğu için) önce bir onay penceresi çıktı, tam olarak 6 boş kalacak yeri (tarih+gün+bölge) doğru listeledi; onaylayınca üretim gerçekleşti ve o 6 yer gerçekten boş kaldı (tahminle birebir eşleşti).
+
+### Sonraki adım riskleri
+
+1. **Faz 0 sadece `haftalik_yer` ve aylık modlarda ÇALIŞIYOR ama gün kısıtlı öğretmenlerin aylık modlardaki davranışı ayrıca test edilmedi** — aylık modlarda zaten gün/bölge daha az kayıyor (ay içinde sabit) ama gün kısıtlı biri yanlış güne denk gelen bir desen konumuna düşerse aynı sınıf sorun teorik olarak mümkün; kullanıcı bu kombinasyonu kullanmaya başlarsa ayrıca doğrulanmalı.
+2. **`weekly_capacity` DB sütunu hâlâ duruyor** (arayüzden kaldırıldı ama düşürülmedi) — ileride bir temizlik migration'ında kaldırılabilir.
+3. **Kıtlık önizlemesi motoru İKİ KEZ çalıştırıyor** (bir dry-run + bir gerçek) — büyük tarih aralıklarında (çok sayıda öğretmen/bölge/hafta) bu performans maliyeti gözlenirse önizleme sonucunu doğrudan "commit" eden ayrı bir yol eklenebilir (şu an bilinçli olarak basit tutuldu, YAGNI).
+
+---
+
+## Faz 7.4 — Gerçek kullanıcı verisinde bulunan 2 hata: kayıp gün + rotasyon hafızası
+
+Kullanıcı canlı okulunun ürettiği gerçek çizelgeden iki ekran görüntüsü paylaştı: (1) bir haftada bir hafta içi günü (Çarşamba) tabloda hiç görünmüyordu; (2) bir öğretmen (Orhan Çiftçi) belirli bir haftaya kadar düzgün sırayla dönerken o haftadan sonra sırası tamamen karışmış ve bir daha düzelmemişti.
+
+### Tamamlanan
+
+1. **Kayıp gün — görüntüleme hatası.** `Dashboard.jsx`'teki `buildScheduleTable`, tablo satırlarını (`dates`) SADECE en az bir atama satırı olan günlerden üretiyordu. Haftalık nöbet limiti (max_duty_per_week) artık gerçek bir hard rule olduğundan, bir gün TÜM bölgelerde uygun aday kalmayabilir (kıtlık) — bu durumda o güne hiç satır yazılmıyor, dolayısıyla gün TABLODAN TAMAMEN KAYBOLUYORDU (boş bir satır olarak bile görünmüyordu). **Düzeltme:** `dates` artık sorgulanan aralığın (`viewedRange`, yeni state — üretilen/görüntülenen son aralığı tutar) TÜM hafta içi günlerinden üretiliyor; aynı sebeple `zoneNames` de artık satırlardan değil okulun güncel aktif bölge listesinden (`zones`) geliyor (bir bölgenin de aynı şekilde tamamen boş kalıp sütunuyla birlikte kaybolması mümkündü). Tatil günleri artık eski tasarımdaki gibi "🎌 ... — KAPALI" satırı olarak özel gösteriliyor (holidays state'inden `holidaysByDate` haritası).
+2. **Rotasyon hafızası kaybı — motor hatası (gerçek kök neden bulundu).** `lib/db/bulkSchedule.js`'in çapa (anchor) mantığı SADECE bir önceki haftanın satırlarına bakıyordu. Bir hücre bir hafta boş kaldığında (yukarıdaki #1'in sebebiyle) o hücre için hiç satır yazılmıyor — bir SONRAKİ hafta AYRI bir `generateBulkSchedule` çağrısıyla üretilince (ki gerçek kullanım hep böyle: idareci zamanla farklı aralıklar için tekrar tekrar "Program Oluştur"a basıyor), çapa haftası o hücre için "hiç sahibi yokmuş" gibi yeniden kuruluyordu — desen o noktada SIFIRLANIYOR, yerine adillikle rastgele biri geçiyor, ve o andan sonra öğretmenin gerçek sırası bir daha geri gelmiyordu (kalıcı cursor olmadığından iz sürülemiyordu).
+   - **Düzeltme (`haftalik_yer` modu):** Çapa artık sadece bir önceki haftaya değil, gerekirse en fazla 26 hafta geriye bakıyor — her (gün,bölge) hücresi için GERÇEK sahibi bulunana kadar. `lib/engine/rotation.js`'e eklenen saf `advanceWeekGridPosition(weekday, zi, zoneCount, steps)` fonksiyonu, gün-öncelikli tek döngüde bir hücrenin N adım sonra nereye geleceğini KAPALI FORMDA hesaplıyor (advanceWeekGrid'i N kez çağırmadan) — bulunan her eski hafta satırı, o haftadan çapaya kaç işlenebilir hafta geçtiği hesaplanıp buna göre doğru güncel hücreye yerleştiriliyor; daha YENİ bir haftadan zaten dolan hücreler ezilmiyor. Takvim günleri de bu geriye bakışı karşılayacak kadar geniş çekiliyor (yoksa o haftaların tatil olup olmadığı bilinmez, adım sayımı yanlış çıkar).
+   - **Aylık modlara (`aylik_ayni_gun`/`aylik_farkli_gun`) bu geriye-bakış eklenmedi** — bilinçli kapsam daraltması (kullanıcının raporu ve ekran görüntüleri `haftalik_yer` modunu kullanıyordu); aynı sınıf hata orada da teorik olarak mümkün, aşağıda risk olarak not edildi.
+
+### Test kapsamı
+
+- Yeni DB testi: `bir hücre bir hafta boş kalırsa (çapa haftasında satır yoksa) sonraki AYRI üretimde ekibin sırası kaybolmaz` — 1. hafta üretilir, 2. hafta AYRI bir çağrıyla üretilir, 2. haftanın bir hücresi elle SİLİNİR (gerçek senaryoyu simüle eder), 3. hafta AYRI bir çağrıyla üretilir — 3. haftadaki ilgili hücrenin hâlâ 1. haftadan doğru türediği (silinme hiç olmamış gibi) doğrulanıyor.
+- Tam paket: 130/130 yeşil.
+- Tarayıcıda uçtan uca doğrulandı: tek öğretmenli/tek bölgeli test okulunda program üretildi, hafta içi TÜM 5 gün (dolu + boş) tabloda göründü; bir tatil eklenip yeniden üretildiğinde o gün "🎌 ... — KAPALI" olarak doğru gösterildi, "Aktif Gün" sayacı tatili doğru hariç tuttu.
+
+### Sonraki adım riskleri
+
+1. **Aylık rotasyon modlarında (`aylik_ayni_gun`/`aylik_farkli_gun`) aynı "tek hafta/ay'a bakan çapa" sınırlaması hâlâ duruyor** — kıtlık yüzünden bir hücre boş kalırsa orada da hafıza kaybı yaşanabilir; kullanıcı bu modları kullanmaya başlarsa aynı geriye-bakış deseni oraya da taşınmalı (farklı ilerleme matematiği gerektiriyor, ayrı bir artış).
+2. **Bu düzeltme SADECE BUNDAN SONRAKİ üretimlerde düzelir.** Kullanıcının canlı okulunda ZATEN oluşmuş bozuk veriler (Orhan Çiftçi'nin geçmiş haftaları gibi) geriye dönük otomatik düzeltilmiyor — o aralıkları yeniden ürettiğinde (Program Oluştur) motor artık doğru sırayı bulup devam edecek, ama geçmişte zaten yazılmış satırlar olduğu gibi kalır.
+3. **26 haftalık geriye bakış sınırı bir varsayım** — bir hücre 26 haftadan uzun süredir hiç dolmamışsa (çok uzun bir kıtlık dönemi) hâlâ "sahipsiz" sayılıp adillikle sıfırdan kurulur; makul bir okul senaryosunda bunun olması beklenmiyor ama teorik bir sınır.
+
+---
+
+## Faz 7.2 — Tek sayfa tasarıma dönüş + haftalık çift nöbet hatası
+
+Kullanıcı iki şey bildirdi: (1) Faz 7.1'in 5 ayrı sayfalı (`/dashboard` hub + `/teachers` + `/duty-zones` + `/schedule` + `/rules` + `/account`) yapısı "çok karmaşık", eski panelin tek-sayfa hissi isteniyor; (2) haftalık yer değişiminde çift nöbet işaretli olmayan öğretmenler aynı hafta içinde iki kez nöbete giriyor. Ürün kararı belirsizdi (eski panelin kendisi mi, yoksa sadece gezinme mi tek sayfa olsun) — kullanıcıya TEK soru soruldu (CLAUDE.md kural), "gezinme tek sayfa, motor/tablo aynı kalsın" onaylandı.
+
+### Tamamlanan
+
+1. **Çift nöbet hatası — kök neden bulundu.** `lib/db/bulkSchedule.js`'in Faz B'si (boş hücre doldurma) sadece TOPLAM nöbet sayısına bakıyordu, bir öğretmenin AYNI HAFTA içinde başka bir güne zaten atanmış olup olmadığına bakmıyordu — bir kez böyle seçilen öğretmen haftalık desenin (grid) iki farklı gün×bölge hücresinin kalıcı "sahibi" oluyor, hata her hafta tekrarlıyordu. Bir önceki oturumda denenmiş "hard rule" çözümü (`checkMaxDutyPerWeek`'i `checkHardRules`'a ekleyip kesin engellemek) 6 gerçek DB testini kırmıştı (az öğretmenli okullarda hücreler gereksiz boş kalıyordu) — bu yaklaşım terk edildi.
+2. **Düzeltme: hard rule → tercih katmanı.** `checkMaxDutyPerWeek` `checkHardRules` çalıştırıcısından çıkarıldı (`lib/engine/rules/index.js`); `lib/db/bulkSchedule.js`'in Faz B'sinde bir TERCİH olarak uygulanıyor — bu hafta henüz nöbeti olmayan (veya çift nöbetliyse hakkı dolmamış) adaylar önceliklidir, uygun aday hiç kalmazsa (kıtlık varsa) bu tercihin dışına çıkılır. `rules` tablosundaki `max_duty_per_week` aç/kapa anahtarı korundu ve gerçekten bu tercihi devre dışı bırakacak şekilde bağlandı (`activeRuleKeys.has('max_duty_per_week')`); Kurallar ekranındaki açıklaması yeni davranışı yansıtacak şekilde güncellendi (artık "kesin engel" değil, "boş hücre doldururken öncelik" diyor).
+3. **Tek sayfa tasarım.** `/teachers`, `/duty-zones`, `/schedule`, `/rules`, `/account` route'ları kaldırıldı (page.jsx dosyaları silindi, middleware sadeleştirildi). Yeni `app/(wizard)/dashboard/Dashboard.jsx` (istemci bileşeni) tek bir üst header (okul adı + Çıkış Yap) + sekme çubuğu (Öğretmenler/Bölgeler/Program/Kurallar/Hesabım) gösteriyor; her sekme, iş mantığına HİÇ dokunulmayan var olan Manager bileşenini (`TeachersManager`, `DutyZonesManager`, `ScheduleManager`, `RulesManager`, `AccountManager`) render ediyor — sadece her birinin kendi tekrar eden `<header>`/Çıkış Yap/okul adı bloğu (ve artık kullanılmayan `useRouter`/`supabase` çağrıları) kaldırıldı. `dashboard/page.jsx` artık 5 sayfanın ilk verisini (öğretmenler, bölgeler, dönme modu, tatiller, aktif kurallar, abonelik) tek seferde paralel çekip `Dashboard`'a veriyor.
+4. Her Manager'ın `actions.js`'indeki `revalidatePath('/teachers')` vb. çağrılar `revalidatePath('/dashboard')`'a çevrildi (sayfa artık orada).
+
+### Teknik borç
+
+- **Tab durumu URL'e yansımıyor** (sadece `useState`) — sayfayı yenilemek her zaman "Öğretmenler" sekmesine döner, belirli bir sekmeye link verilemez. Kullanıcı şikayeti sadece "karmaşık, tek sayfa olsun" idi, URL senkronizasyonu istenmedi — YAGNI ile ertelendi, ihtiyaç çıkarsa `?tab=` query param'ı küçük bir ekleme.
+- **`selectTeachersForZone`/`getEligibleTeachersForZone` (lib/db/eligibility.js, tekil atama yolu)** haftalık tercihten YARARLANMIYOR — sadece toplu üretim (`bulkSchedule.js`) düzeltildi, çünkü kullanıcının raporu özellikle "haftalık yer değişikliğinde" (bulk rotasyon) hakkındaydı. Tekil yol zaten sadece toplam sayı adilliğiyle seçiyordu, bu turun kapsamı dışında bırakıldı.
+
+### Test kapsamı
+
+- Tam paket: 128/128 yeşil (bir önceki oturumun kırdığı 6 DB testi düzeltildi + yeni bir regresyon testi eklendi: yeterli öğretmen varken kimsenin aynı hafta içinde tekrar etmediğini doğruluyor).
+- Tarayıcıda uçtan uca: yeni test okulu kaydı → `/dashboard` tek sayfa; Öğretmenler sekmesinde öğretmen eklendi, Bölgeler sekmesinde bölge eklendi, sayfa yenilenince veri kalıcı olduğu doğrulandı (sunucu state'i, sadece istemci state'i değil); Program/Kurallar/Hesabım sekmeleri render kontrolü yapıldı. `next build` production derlemesi hatasız (sadece `/dashboard` route'u kaldı).
+
+### Sonraki adım riskleri
+
+1. Diğer 4 Manager bileşeninin (Bölgeler/Program/Kurallar/Hesabım) uçtan uca akışları (bölge silme, program üretme, kural aç/kapa, elle atama ekleme/çıkarma) bu turda tek tek tıklanıp doğrulanmadı — sadece render/temel ekleme testi yapıldı, çünkü DB test paketi bu akışları zaten kapsıyor ve bileşenlerin iç mantığına dokunulmadı (sadece header kaldırıldı). Regresyon riski düşük ama sıfır değil.
+2. Tekil atama yolu (`selectTeachersForZone`) haftalık tercihten habersiz kaldığı için, ileride bu yol daha çok kullanılırsa (örn. otomatik tekil atama önerisi gibi bir özellik gelirse) aynı çift-nöbet deseni orada da görülebilir → azaltma: aynı tiering mantığını oraya da taşımak küçük bir ek iş.
+
+---
+
+## Faz 7.1 — Eski panel emekliye ayrıldı: tek sistem
+
+Kullanıcı `/dashboard` ile `/schedule`'ın iki farklı uygulama gibi davrandığını fark etti — haklıydı: `/dashboard` eski (panel) koduydu; kendi tabloları (`staff`/`locations`/`holidays`), kendi istemci taraflı dağıtım motoru ve kendi "Dağıtım Ayarları" vardı, yeni dönme düzenlerinden tamamen habersizdi. Üstelik giriş/kayıt sonrası varsayılan yönlendirme oraya gidiyordu.
+
+- **`app/(panel)/` tamamen silindi** (Dashboard.jsx 560 satır + actions + css) ve `lib/engine/schedule.js` (eski istemci taraflı dağıtım motoru) kaldırıldı. `DAY_TR` → `lib/engine/weekday.js`'e, MEB tatil listesi → yeni `lib/engine/holidays.js`'e taşındı.
+- **`/dashboard` artık yeni sistemin merkez sayfası** (`app/(wizard)/dashboard/page.jsx`): okul adı + 5 ekran kartı (Öğretmenler / Bölgeler / Program / Kurallar / Hesabım). Giriş/kayıt yönlendirmeleri değişmeden çalışıyor.
+- **Tatil yönetimi yeni sisteme taşındı** — kritik boşluk: motorun okuduğu `calendar_days` için hiçbir UI yoktu; eski panelin tatil özelliği motorun HİÇ okumadığı `holidays` tablosuna yazıyordu. `/schedule`'a "Resmi Tatiller" kartı eklendi: elle tatil ekle/sil + "🎌 2026-2027 MEB Tatillerini Yükle" (29 gün, upsert — tekrar basmak kopya oluşturmaz). `lib/db/calendarDays.js`'e `getHolidays`/`upsertHolidays`/`deleteCalendarDay` eklendi.
+- **Bug düzeltmesi:** `getSchoolForUser` `.single()` kullanıyordu — okulu silinmiş/kaydı yarım kalmış kullanıcıda tüm sayfalar çöküyordu ("Cannot coerce..."); `.maybeSingle()` yapıldı, artık "Henüz bir okula bağlı değilsin" düzgün gösteriliyor. (Kullanıcının daha önce bildirdiği tek seferlik `holidays` RLS hatası da büyük olasılıkla eski panelin bu karmaşasındandı — panel gitti, konu kapandı.)
+- Eski `staff`/`locations`/`holidays` TABLOLARI DB'den düşürülmedi (yıkıcı migration atılmadı; `staff` RLS izolasyon testi hâlâ üzerinde koşuyor) → ileride temizlik migration'ı.
+
+### Test kapsamı
+
+- Tam paket 123/123 yeşil (silinen eski motorla birlikte 3 eski birim test de gitti).
+- Tarayıcıda uçtan uca: yeni kayıt → `/dashboard` merkez sayfası açıldı; `/schedule`'dan MEB tatilleri tek tuşla yüklendi (29 kayıt listelendi); 26-30 Ekim üretiminde 29 Ekim (Cumhuriyet Bayramı) atandı DEĞİL, diğer 4 gün atandı. Test verisi temizlendi.
+
+---
+
+## Faz 7 — Dönme düzenleri: kullanıcının tam ürün tanımı (3 mod + tatilde sıra donması)
+
+Kullanıcı rotasyonun tam spesifikasyonunu verdi; #3'teki haftalık kaydırma modeli bu tanımın üzerine genişletildi.
+
+### Tamamlanan
+
+1. **`supabase/migrations/0011_school_rotation_mode.sql`** (canlıya uygulandı) — `schools.rotation_mode` ('haftalik_yer' varsayılan / 'aylik_ayni_gun' / 'aylik_farkli_gun'), check kısıtı; schools'a update politikası + SADECE bu sütuna sütun-bazlı grant (okul adı/il/ilçe istemciden hâlâ değiştirilemez).
+2. **`lib/engine/rotation.js`** — `advanceWeekGrid`: haftalik_yer'in bir adımı; hücreler gün-öncelikli TEK döngü (Pzt z0 → Pzt z1 → ... → Pzt zSon → Sal z0 → ... → Cum zSon → başa). Bölge +1 her hafta; bölge listesi sarınca GÜN +1 — kullanıcının "4 bölgeli okulda 5. hafta zemine döner ve Salı tutar" örneği birebir. `advanceMonthGrid({shiftDay})`: aylık modların adımı — aylik_ayni_gun: bölge +1, gün sabit; aylik_farkli_gun: bölge +1 VE gün +1 ("Pzt zeminde başlayan ay bitince Salı 1. katta"). Hepsi saf, 8 yeni birim test.
+3. **`lib/db/bulkSchedule.js`** — mod seçimine göre hafta/ay geçişlerinde ızgarayı ilerletir. **Tatilde sıra dönmez:** sadece en az bir okul günü içeren hafta/aylar sayılır (`countSchedulableWeeks`/`countSchedulableMonths`); tamamen tatil bir hafta/ay sıralamayı İLERLETMEZ, kaldığı yerden devam eder. Çapa artık `getLatestAssignmentDateBefore` ile bulunur (sadece "bir önceki hafta" değil — uzun tatil sonrası da DB'deki son üretilmiş haftadan devam eder; #3'ün 1. riski kapandı).
+4. **UI** — `/schedule` ekranına "Dönme Düzeni" seçici (3 mod, okul bazlı, anında kaydedilir; tatilde sıranın ilerlemediğini açıklayan bilgi kutusu). Öğretmen ekleme formunda çift nöbet + gün kısıtı zaten soruluyordu (kullanıcı şartı 1 — mevcut davranış, değişiklik gerekmedi).
+5. Yeni DB testleri (4): tek bölgeli okulda gün +1/hafta (döngü sarınca gün değişimi); tamamen tatil haftanın sırayı ilerletmediği; aylik_ayni_gun (ay içi sabit + ay geçişinde bölge +1 gün aynı); aylik_farkli_gun (bölge +1 VE gün +1, günleri ayırt edebilen 4 öğretmenli kurulum).
+
+### Bilinçli kararlar
+
+- "Ay" = takvim ayı. Ay içinde düzen sabittir (aylık modlarda öğretmen her hafta aynı gün aynı yerde tutar) — kullanıcı tanımının doğrudan sonucu.
+- Sıra durumu için hâlâ kalıcı cursor yok — düzen DB'deki son üretilmiş hafta/aydan türetilir (idempotent, "Program Oluştur"a tekrar basmak sırayı bozmaz).
+- Desende sahibi olmayan hücreler adillikle dolar ve dolduran desene katılır; sahibi olup o gün uygun olmayanın yeri korunur (desen bozulmaz).
+
+### Test kapsamı
+
+- Birim: `advanceWeekGrid`/`advanceMonthGrid` 8 test (geçer + eler senaryoları). DB: `bulkSchedule.test.js` 12 test (4 yeni).
+- Tarayıcıda uçtan uca: mod seçici 3 seçenekle render oldu; `aylik_farkli_gun`'a geçiş RLS'ten geçip kaydedildi; Eylül+Ekim üretiminde "AYSE BIR: Eylül Pzt ZEMİN → Ekim Salı 1. KAT" birebir doğrulandı. Test verisi temizlendi.
+- Tam paket: 126/126 yeşil.
+
+### Sonraki adım riskleri
+
+1. Aylık modlarda bölge sayısı 5'in katıysa (aylik_farkli_gun) bazı gün×yer kombinasyonları hiç ziyaret edilmez (matematiksel: gün ve bölge aynı anda +1 gittiği için) — kullanıcının tanımladığı davranış böyle, ama okullar sorarsa açıklamak gerekebilir.
+2. Mod değişikliği geçmişe dokunmaz; değişiklikten sonraki ilk üretim, son üretilmiş haftayı yeni modun çapası olarak kullanır — geçiş haftasında sıra "yeni modun mantığıyla" bir adım atar, bu beklenmedik görünebilir.
+
+---
+
+## Faz 6 sonrası düzeltme #3 — Rotasyon algoritması yeniden yazıldı: haftalık sıralı yer değişimi
+
+Kullanıcı, #1 ve #2'deki düzeltmelere rağmen gerçek çizelge ekran görüntüsüyle sorunu netleştirdi: "Kudsi Ata 1. hafta Pazartesi A Blok'taysa 2. hafta Pazartesi B Blok olmalı" — yani beklenen model öğretmen bazlı opt-in rotasyon değil, TÜM çizelgenin haftalık sıralı kayması. Eski model (rotations tablosu + zone_cursor, öğretmen başına) bu beklentiyi yapısal olarak karşılayamıyordu: herkes cursor 0'dan başlayınca çakışıyor, kaybeden Faz B adilliğine düşüp "sıra atlamış" görünüyordu.
+
+- **Yeni model (`lib/db/bulkSchedule.js`, baştan yazıldı):** Her haftanın gününün (Pazartesi, Salı, ...) kendi öğretmen ekibi vardır; bir sonraki hafta AYNI GÜNÜN ekibi bölge listesinde (öncelik + eklenme sırası) BİR bölge ileri kayar, sondaki başa döner. Kalıcı cursor YOK — bir haftanın düzeni bir önceki haftanın düzeninden türetilir: aralıktan önceki haftada DB'de atama varsa o düzenin kaydırılmışı (çapa), yoksa ilk hafta adillikle sıfırdan kurulur. Bu tasarım gereği idempotent: aynı aralığı tekrar üretmek aynı çizelgeyi verir, aralığı uzatmak/sadece sonraki haftayı üretmek sırayı DB'deki son haftadan devam ettirir.
+- Kaydırılan öğretmen o gün uygun değilse (izin/kapalı bölge/kural) o hücre adillik doldurmasına düşer ama DESEN bozulmaz — ertesi hafta öğretmen kendi sırasındaki bölgeye döner. `is_manual` satırlar korunur; idareci 1. haftayı elle düzenlerse sonraki haftalar o düzenden türer ("sıra nasıl olsun" kontrolü = ilk haftanın kendisi + bölge ekleme sırası).
+- **Kaldırılanlar (model değişikliğinin doğal sonucu):** `lib/db/rotations.js`, öğretmen ekranındaki "🔄 Rotasyon" paneli ve üç rotasyon action'ı (#2'de eklenen "başlangıç bölgesi" seçici dahil — artık gereksiz), `rotations` tablosuna dayalı Faz A. `rotations` TABLOSU migration'la düşürülmedi (yıkıcı değişiklik yapılmadı, tenant izolasyon RLS testi hâlâ üzerinde koşuyor); ileride bir temizlik migration'ında düşürülebilir.
+- **Görüntüleme düzeltmesi:** çizelge tablosunun bölge sütunları alfabetik sıralanıyordu — rotasyonun "bir sonraki bölge" sırasıyla (öncelik + eklenme sırası) aynı olacak şekilde düzeltildi (`ScheduleManager.jsx`, `getAssignmentsForRange` join'ine `priority`/`created_at` eklendi). Aksi halde doğru rotasyon bile ekranda karışık görünürdü.
+- `lib/engine/rotation.js` sadeleşti: `getWeekStart`, `addDays`, `weeksBetween`, `shiftLayout` (hepsi saf, birim testli); `groupDatesByWeek`/`getZoneForCursor` silindi.
+
+### Test kapsamı
+
+- Yeni DB testleri (`tests/db/bulkSchedule.test.js`): (1) 3 öğretmen × 3 bölge × 3 hafta — her Pazartesi ekibi bir sonraki hafta bir sonraki bölgede; (2) aynı aralığı 3 kez üretmek düzeni birebir korur + sadece 2. haftayı üretmek DB'deki 1. haftadan doğru devam eder. Eski cursor tabanlı testler (`rotationSchedule.test.js`, `rotationToggle.test.js`) modelle birlikte silindi.
+- Tarayıcıda uçtan uca: 3 bölge (A BLOK → B BLOK → BAHCE eklenme sırası) + 3 öğretmenli test okulunda `/schedule`'dan 3 hafta üretildi — ARIFE CAN: A→B→BAHCE, KUDSI ATA: B→BAHCE→A, SELMA DIREK: BAHCE→A→B (birebir kullanıcının istediği desen). Tekrar üretim aynı tabloyu verdi; sadece 4. hafta üretilince sıra DB'den doğru devam etti (ARIFE BAHCE→A başa sardı). Test verisi temizlendi.
+- Tam paket: 116/116 yeşil.
+
+### Sonraki adım riskleri
+
+1. **Çapa yalnızca bir önceki haftaya bakar** — uzun tatil sonrası (aralıktan önceki hafta tamamen boşsa) düzen adillikle sıfırdan kurulur, tatil öncesi sıradan devam etmez → azaltma: gerekirse çapa aramasını birkaç hafta geriye genişletmek küçük bir değişiklik.
+2. **Hafta içi ekipler sabittir** — Pazartesi ekibi hep Pazartesi nöbet tutar (gün değişimi yok); kullanıcı gün rotasyonu da isterse ayrı bir artış gerekir.
+3. **`rotations` tablosu artık motor tarafından kullanılmıyor** ama şemada duruyor → azaltma: ileride temizlik migration'ı.
+
+---
+
+## Faz 6 sonrası düzeltme — Rotasyon cursor idempotency + bölge sıralaması
+
+Gerçek kullanıcının kendi okuluyla canlı test etmesi sırasında bulunan iki rapor: "bazı öğretmenlere çift nöbet vermiş" ve "rotasyon bazen bir sıra atlayıp başka yere geçiyor".
+
+- **Rotasyon sırası atlıyor — kök neden bulundu ve düzeltildi.** `generateBulkSchedule` (Faz A), bir haftayı işledikten sonra `rotations.zone_cursor`'ı **koşulsuz** ilerletiyordu — aynı tarih aralığı (veya onu kapsayan bir aralık) tekrar üretilirse (kullanıcı "Program Oluştur"a tekrar basarsa) cursor her seferinde bir daha ileri sarıyordu. Gerçek kullanım sırasında (test/düzeltme amaçlı tekrar tekrar üretmek) bu, bir öğretmenin beklenenden fazla bölge atlamasına yol açar. **Düzeltme:** `lib/db/bulkSchedule.js` — cursor artık "`last_advanced`'a kayıtlı haftanın bölgesi" anlamına geliyor; bir hafta yalnızca `last_advanced`'dan DAHA YENİ ise cursor ilerletiliyor, aynı (veya daha eski) hafta tekrar işlenirse cursor sabit kalıyor. Yeni regresyon testi (`tests/db/bulkSchedule.test.js`): aynı aralığı 3 kez üretmek cursor'ı sabit tutuyor; aralığı bir hafta uzatmak cursor'ı tam olarak bir ilerletiyor. Var olan `tests/db/rotationSchedule.test.js` cursor'ın artık "sıradaki" değil "mevcut haftanın" bölgesini gösterdiği yeni semantiğe göre güncellendi.
+- **Bölge sıralaması alfabetikti, eklenme sırası değil.** `lib/db/dutyZones.js`'teki `getDutyZones` ikincil sıralama olarak `name` kullanıyordu; `priority` alanı hiç ayarlanmamış (varsayılan 0) okullarda bu, rotasyon cursor'ının bölgeleri **alfabetik** sırayla dolaşması demekti — kullanıcı bölgeleri ekleme sırasıyla dönmesini bekliyordu. Kullanıcının "ya buton ya da eklenme sırası" isteğinden ikincisi seçildi (daha basit, ek UI gerektirmiyor — YAGNI): ikincil sıralama `created_at`'e çevrildi. `priority` alanı hâlâ elle öne alma için kullanılabilir durumda (0'dan farklı bir değer verilirse önceliği geçersiz kılar). Yeni test (`tests/db/duty-zones-crud.test.js`): eşit priority'li bölgeler bilerek alfabetik ters sırayla eklenip listenin eklenme sırasını yansıttığı doğrulandı.
+- **Çift nöbet raporu — kök neden BULUNAMADI.** `bulkSchedule.js`'in Faz A/Faz B paylaşımlı `dailyCounts` mekanizması, `checkMaxDutyPerDay` kuralı ve `rules` tablosu (gerçek okullarda hiç satır yok → varsayılan olarak tüm kurallar aktif) üç ayrı geçişte satır satır incelendi, bug bulunamadı — mantık doğru görünüyor (aynı gün ikinci bir otomatik atama, `allow_double_duty=false` bir öğretmen için doğru şekilde engelleniyor, mevcut testler bunu kanıtlıyor). Kullanıcının gerçek okulunda şu an 0 öğretmen/0 atama olduğundan (veri temizlenmiş) olayı yeniden üretecek gerçek veri incelenemedi. **Elle ekleme ("+" butonu) yolunun HİÇBİR kural kontrolünden geçmediği** fark edildi — bu, idarecinin bilerek elle ikinci bir atama yapması senaryosunda beklenen bir davranış (kilitli/elle düzenleme motoru bilerek geçersiz kılar), ama kullanıcı "işaretlemedim" diyorsa bu yol muhtemelen değil. **Sonraki adım:** kullanıcıdan hangi öğretmen/tarih, "Program Oluştur" mu yoksa elle "+" ile mi olduğu soruldu — gerçek veriyle yeniden üretilebilirse kök neden kesinleşecek.
+
+### Test kapsamı
+
+Tam paket: 119/119 yeşil (2 yeni test eklendi, 1 var olan test yeni doğru semantiğe göre güncellendi).
+
+---
+
+## Faz 6 sonrası düzeltme #2 — ~~Rotasyon sırası için elle "başlangıç bölgesi" kontrolü~~ (düzeltme #3 ile kaldırıldı — model değişti)
+
+Yukarıdaki idempotency + eklenme-sırası düzeltmelerinden sonra kullanıcı hâlâ "bazı öğretmenler tam sırasında dönmüyor" bildirdi ve kökten bir çözüm için "sıra nasıl olsun diye buton ekleyip ona göre döndürelim" istedi.
+
+- **Gerçek kök neden: rotasyona dahil edilen HER öğretmen cursor 0'dan (aynı bölgeden) başlıyor.** `createRotation` her zaman `zone_cursor=0` ile başlatıyor (bilinçli, `lib/db/rotations.js`). Birden fazla öğretmen rotasyondaysa, ikisi de aynı haftada aynı bölgeyi "istiyor" — biri Faz A'da o bölgeye yerleşir, "çakışan" diğer öğretmen o hafta o bölgeye giremez ve Faz B'nin (basit adillik) rastgele/adalet-tabanlı doldurmasına düşer. Bu, o öğretmen için o haftanın rotasyon sırasını tamamen dışarıda bırakıyor — kullanıcıya "sırası atlıyor/karışıyor" gibi görünen tam olarak bu.
+- **Düzeltme — idareci artık her rotasyondaki öğretmenin başlangıç bölgesini elle seçebiliyor.** `lib/db/rotations.js`'e `setRotationZone(supabase, rotationId, zoneCursor)` eklendi: cursor'ı verilen bölgeye sabitler, `last_advanced`'ı null'a çeker (yeni rotasyon oluşturmakla aynı "temiz başlangıç" anlamına gelir — bir sonraki üretim bu bölgeyi bir ileri kaydırmadan doğrudan kullanır). `app/(wizard)/teachers/actions.js`'e `setTeacherRotationStartZone(teacherId, zoneId)` server action'ı eklendi (bölge id'sini okulun aktif bölge listesindeki index'e çevirir — motorun kullandığı SIRAYLA birebir aynı liste).
+- **UI (`TeachersManager.jsx`, "🔄 Rotasyon" paneli):** ham `zone_cursor` sayısı yerine artık bölge adlarından oluşan bir `<select>` gösteriliyor ("Şu anki / başlangıç bölgesi") — idareci hem mevcut konumu bölge adıyla görüyor hem de değiştirebiliyor. Çakışma riskini açıklayan bir yardım metni eklendi.
+- Yeni bölge/öğretmen ekleme akışına dokunulmadı (YAGNI — ayrı bir "sıra sihirbazı" eklenmedi, var olan `priority`/`created_at` tabanlı bölge sırasını ve şimdi eklenen öğretmen-başlangıç-noktası kontrolünü birleştirmek yeterli).
+
+### Test kapsamı
+
+- `tests/db/rotationToggle.test.js`: `setRotationZone` cursor'ı doğru ayarlıyor ve `last_advanced`'ı sıfırlıyor (1 yeni test).
+- `tests/db/bulkSchedule.test.js`: iki rotasyondaki öğretmene farklı başlangıç bölgesi verilince (biri varsayılan A, diğeri elle B) çakışmadan kendi bölgelerinde kaldıkları, gerçek Supabase'e karşı `generateBulkSchedule` ile doğrulandı (1 yeni test).
+- Tarayıcıda uçtan uca doğrulandı: yeni bir test okulunda 2 bölge + 2 öğretmen oluşturuldu, T1 rotasyona dahil edildi (varsayılan Zone A), select'ten Zone B seçilip "Başlangıç bölgesi güncellendi" toast'ı görüldü; Supabase CLI ile `zone_cursor=1, last_advanced=null` olarak doğru kaydedildiği kanıtlandı. Test verisi temizlendi.
+- Tam paket: 121/121 yeşil.
+
+### Sonraki adım riskleri
+
+1. **Bölge sırası hâlâ okul çapında tek bir liste** (`priority`/`created_at`) — öğretmen bazlı "sadece A ve C bölgeleri arasında dön, B'yi hiç görme" gibi bir kısıtlama yok. Şu an kimse istemedi, YAGNI ile ertelendi.
+2. **`setTeacherRotationStartZone` sadece "başlangıç" konumunu ayarlıyor, geçmiş atamaları yeniden yazmıyor** — idareci bir öğretmenin bölgesini değiştirdiğinde daha önce üretilmiş (geçmiş haftalardaki) atamalar olduğu gibi kalır, sadece bundan sonraki üretim yeni bölgeden başlar. Bilinçli — kilitli/elle düzenlenmiş geçmiş veriye dokunmamak motorun genel idempotency ilkesiyle tutarlı.
+
+---
+
 ## Faz 6 sonrası düzeltme — Teşkilat şeması çekme: ikinci MEB şablonu + ölçekleme kararı
 
 Gerçek bir kullanıcının kendi okuluyla (zseilkokulu.meb.k12.tr) canlı test etmesi sırasında bulundu.

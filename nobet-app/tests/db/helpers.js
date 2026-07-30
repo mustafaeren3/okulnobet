@@ -7,11 +7,25 @@ import { createClient } from '@supabase/supabase-js';
 export const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 export const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
+// label harf ağırlıklı olabilir ("bulk-shift-idem") — sadece rakamları
+// almak aynı runId'yi paylaşan testler arasında ÇAKIŞAN telefonlar
+// üretirdi. Basit bir karma ile label'ı da sayıya çeviriyoruz.
+function labelHash(label) {
+  let hash = 0;
+  for (let i = 0; i < label.length; i++) hash = (hash * 31 + label.charCodeAt(i)) >>> 0;
+  return hash;
+}
+
 export function makeTestUser(label, runId) {
   return {
     email: `zzz-tenant-test-${label}-${runId}@example.invalid`,
     password: `TestPass${runId}!`,
     schoolName: `ZZZ_TENANT_TEST_OKUL_${label.toUpperCase()}`,
+    // register_school artık p_phone alıyor (bkz. 0013_pricing_and_trial_limits.sql
+    // — bir e-posta/telefon sadece bir deneme hesabı açabilir). Testte
+    // her çağrı benzersiz bir telefon üretir, aksi halde 2. test
+    // "telefon zaten kullanılmış" hatasıyla düşer.
+    phone: `+905${String(runId + labelHash(label)).slice(-9).padStart(9, '0')}`,
   };
 }
 
@@ -40,6 +54,7 @@ export async function signUpAndRegisterSchool(client, user) {
     p_name: user.schoolName,
     p_city: 'Test',
     p_district: 'Test',
+    p_phone: user.phone,
   });
   if (rpcError) {
     throw new Error(`register_school başarısız (${user.email}): ${rpcError.message}`);

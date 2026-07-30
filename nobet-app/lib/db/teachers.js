@@ -31,6 +31,7 @@ export async function createTeacher(supabase, schoolId, teacher) {
       weekly_capacity: teacher.weekly_capacity ?? 1,
       allow_double_duty: teacher.allow_double_duty ?? false,
       restriction_mode: teacher.restriction_mode ?? 'ALL',
+      fixed_zone_id: teacher.fixed_zone_id ?? null,
     })
     .select()
     .single();

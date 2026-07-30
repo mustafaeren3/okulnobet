@@ -1,0 +1,148 @@
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600;700&display=swap');
+
+.mkt-root {
+  --bg: #0f1117;
+  --surface: #1a1d27;
+  --surface2: #22263a;
+  --border: #2e3350;
+  --accent: #4f7ef7;
+  --accent2: #f7c14f;
+  --danger: #f74f4f;
+  --success: #4ff7a0;
+  --text: #e8ecff;
+  --muted: #7a82a8;
+
+  font-family: 'DM Sans', sans-serif;
+  color: var(--text);
+  min-height: 100vh;
+}
+.mkt-root * { box-sizing: border-box; }
+
+/* ── HEADER ─────────────────────────────────────── */
+.mkt-header {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 18px 32px;
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  background: rgba(15, 17, 23, 0.92);
+  backdrop-filter: blur(6px);
+  z-index: 100;
+}
+.mkt-logo {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 22px;
+  letter-spacing: 2px;
+  background: linear-gradient(90deg, var(--accent), var(--accent2));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-decoration: none;
+}
+.mkt-nav { display: flex; gap: 18px; margin-left: 12px; }
+.mkt-nav a { color: var(--muted); text-decoration: none; font-size: 14px; font-weight: 600; }
+.mkt-nav a:hover { color: var(--text); }
+.mkt-header-actions { margin-left: auto; display: flex; gap: 10px; }
+
+/* ── BUTTONS ────────────────────────────────────── */
+.mkt-btn {
+  display: inline-block;
+  border: none;
+  border-radius: 8px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 10px 18px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.mkt-btn-primary { background: var(--accent); color: #fff; }
+.mkt-btn-outline { background: transparent; color: var(--text); border: 1px solid var(--border); }
+.mkt-btn-lg { padding: 14px 28px; font-size: 15px; border-radius: 10px; }
+
+/* ── LAYOUT ─────────────────────────────────────── */
+.mkt-main { max-width: 960px; margin: 0 auto; padding: 48px 24px 80px; }
+.mkt-main.mkt-narrow { max-width: 760px; }
+
+.mkt-hero { text-align: center; padding: 60px 24px 40px; }
+.mkt-hero h1 {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 44px;
+  letter-spacing: 1px;
+  margin: 0 0 16px;
+  line-height: 1.15;
+}
+.mkt-hero p { color: var(--muted); font-size: 17px; max-width: 600px; margin: 0 auto 28px; }
+.mkt-hero-actions { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
+
+.mkt-section { margin: 56px 0; }
+.mkt-section h2 {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 26px;
+  letter-spacing: 1px;
+  color: var(--accent2);
+  margin-bottom: 20px;
+}
+.mkt-section h3 { font-size: 16px; margin: 20px 0 8px; }
+.mkt-section p, .mkt-section li { color: var(--muted); line-height: 1.7; font-size: 14px; }
+
+.mkt-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 24px;
+  margin-bottom: 16px;
+}
+
+.mkt-feature-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
+.mkt-feature-grid .mkt-card { margin-bottom: 0; }
+.mkt-feature-grid .mkt-icon { font-size: 28px; margin-bottom: 10px; }
+.mkt-feature-grid h4 { margin: 0 0 6px; font-size: 15px; }
+.mkt-feature-grid p { margin: 0; font-size: 13px; }
+
+/* ── PRICING ────────────────────────────────────── */
+.mkt-pricing-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
+.mkt-pricing-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 22px;
+  text-align: center;
+}
+.mkt-pricing-card.mkt-pricing-highlight { border-color: var(--accent); }
+.mkt-pricing-card .mkt-tier-label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 10px; }
+.mkt-pricing-card .mkt-price { font-family: 'Bebas Neue', sans-serif; font-size: 30px; color: var(--accent); }
+.mkt-pricing-card .mkt-price-sub { font-size: 11px; color: var(--muted); margin-bottom: 14px; }
+.mkt-billing-toggle { display: flex; justify-content: center; gap: 4px; margin-bottom: 28px; }
+.mkt-billing-toggle button {
+  background: none; border: 1px solid var(--border); color: var(--muted);
+  padding: 8px 18px; font-size: 13px; font-weight: 600; cursor: pointer;
+}
+.mkt-billing-toggle button:first-child { border-radius: 8px 0 0 8px; }
+.mkt-billing-toggle button:last-child { border-radius: 0 8px 8px 0; }
+.mkt-billing-toggle button.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+/* ── FAQ ────────────────────────────────────────── */
+.mkt-faq-item { border-bottom: 1px solid var(--border); padding: 16px 0; }
+.mkt-faq-item h3 { margin: 0 0 8px; font-size: 15px; color: var(--text); }
+.mkt-faq-item p { margin: 0; }
+
+.mkt-placeholder { color: var(--accent2); font-weight: 700; }
+
+/* ── FOOTER ─────────────────────────────────────── */
+.mkt-footer {
+  border-top: 1px solid var(--border);
+  padding: 28px 32px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  justify-content: space-between;
+  align-items: center;
+  color: var(--muted);
+  font-size: 13px;
+}
+.mkt-footer nav { display: flex; gap: 16px; flex-wrap: wrap; }
+.mkt-footer a { color: var(--muted); text-decoration: none; }
+.mkt-footer a:hover { color: var(--text); }

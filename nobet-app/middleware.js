@@ -28,9 +28,10 @@ export async function middleware(request) {
 
   const { data: { user } } = await supabase.auth.getUser();
 
-  // Giriş yapılmamışsa korumalı sayfalara erişimi engelle
-  const protectedPaths = ['/dashboard', '/teachers', '/duty-zones', '/schedule', '/rules', '/account'];
-  if (!user && protectedPaths.some((p) => request.nextUrl.pathname.startsWith(p))) {
+  // Giriş yapılmamışsa korumalı sayfaya erişimi engelle. Tek sayfa
+  // (/dashboard) — Öğretmenler/Bölgeler/Program/Kurallar/Hesabım artık
+  // ayrı route değil, aynı sayfada sekme.
+  if (!user && (request.nextUrl.pathname.startsWith('/dashboard') || request.nextUrl.pathname.startsWith('/super-admin'))) {
     return NextResponse.redirect(new URL('/login', request.url));
   }
 
@@ -38,5 +39,5 @@ export async function middleware(request) {
 }
 
 export const config = {
-  matcher: ['/dashboard/:path*', '/teachers/:path*', '/duty-zones/:path*', '/schedule/:path*', '/rules/:path*', '/account/:path*'],
+  matcher: ['/dashboard/:path*', '/super-admin/:path*'],
 };

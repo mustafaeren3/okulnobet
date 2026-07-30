@@ -1,13 +1,20 @@
 // duty_zones tablosuna dokunan tüm sorgular. Component/action'lar Supabase'i
 // doğrudan çağırmaz, bu katman üzerinden erişir (CLAUDE.md mimari kural 2).
 
+// Sıralama: önce priority (yüksek önce — okul isterse elle öne alabilir),
+// sonra eklenme sırası (created_at). Rotasyon cursor'ı bu listenin
+// index'ini kullandığı için sıralama STABİL olmalı — daha önce name'e
+// göre ikincil sıralanıyordu, bu da priority hiç ayarlanmamış (hepsi 0)
+// okullarda rotasyonun alfabetik sırayla dönmesine yol açıyordu; okulun
+// bölgeleri eklediği sırayla dönmesini bekleyen kullanıcıya "sıra
+// atlıyor" gibi görünüyordu.
 export async function getDutyZones(supabase, schoolId) {
   const { data, error } = await supabase
     .from('duty_zones')
     .select('*')
     .eq('school_id', schoolId)
     .order('priority', { ascending: false })
-    .order('name');
+    .order('created_at');
   if (error) throw new Error(error.message);
   return data;
 }

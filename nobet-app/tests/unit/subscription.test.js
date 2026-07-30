@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getSubscriptionStatus } from '@/lib/engine/subscription';
+import { getSubscriptionStatus, checkTrialDateRangeAllowed } from '@/lib/engine/subscription';
 
 describe('getSubscriptionStatus', () => {
   it("status='trialing' ve kalan gün varsa kullanılabilir sayılır (geçer)", () => {
@@ -45,5 +45,34 @@ describe('getSubscriptionStatus', () => {
   it("status='canceled' kullanılamaz sayılır (eler)", () => {
     const result = getSubscriptionStatus({ status: 'canceled', trialEndsAt: null, currentPeriodEnd: null });
     expect(result.isUsable).toBe(false);
+  });
+
+  it("status='frozen' (süper admin dondurmuş) kullanılamaz sayılır (eler)", () => {
+    const result = getSubscriptionStatus({ status: 'frozen', trialEndsAt: null, currentPeriodEnd: null });
+    expect(result.isUsable).toBe(false);
+    expect(result.label).toBe('Dondurulmuş (Yönetici)');
+  });
+});
+
+describe('checkTrialDateRangeAllowed', () => {
+  it('deneme sürümünde 31 günlük aralık izinlidir (geçer)', () => {
+    const result = checkTrialDateRangeAllowed({ status: 'trialing', startDate: '2026-10-01', endDate: '2026-10-31' });
+    expect(result.allowed).toBe(true);
+  });
+
+  it('deneme sürümünde 32 günlük aralık reddedilir (eler)', () => {
+    const result = checkTrialDateRangeAllowed({ status: 'trialing', startDate: '2026-10-01', endDate: '2026-11-01' });
+    expect(result.allowed).toBe(false);
+    expect(result.reason).toMatch(/en fazla/);
+  });
+
+  it('deneme sürümünde bir yıllık aralık reddedilir (eler)', () => {
+    const result = checkTrialDateRangeAllowed({ status: 'trialing', startDate: '2026-09-01', endDate: '2027-06-30' });
+    expect(result.allowed).toBe(false);
+  });
+
+  it("status='active' iken aralık sınırı uygulanmaz (geçer)", () => {
+    const result = checkTrialDateRangeAllowed({ status: 'active', startDate: '2026-09-01', endDate: '2027-06-30' });
+    expect(result.allowed).toBe(true);
   });
 });

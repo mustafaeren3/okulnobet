@@ -2,38 +2,66 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
+import { getSchoolsForDistrict } from '@/lib/data/mebSchoolLookup';
 
-export async function signUpAndRegisterSchool(formData) {
+// İki aşamalı kayıt: (1) hesap oluştur → e-postaya 6 haneli onay kodu
+// gider (Supabase Auth "Confirm email" açık olmalı, e-posta şablonunda
+// {{ .Token }} kullanılmalı — bkz. proje kurulum notları), (2) kod
+// doğrulanınca okulu oluşturur. Okul, KOD DOĞRULANMADAN oluşturulmaz —
+// aksi halde onaysız/sahte bir e-postayla da okul açılabilirdi.
+// Telefon numarası da register_school'a gidiyor: "her e-posta/telefon
+// sadece bir deneme hesabı açabilir" kısıtı orada (trial_registrations,
+// bkz. 0013_pricing_and_trial_limits.sql) uygulanıyor.
+//
+// "Confirm email" KAPALIYSA (ör. Resend domain doğrulaması henüz yokken
+// geçici test amaçlı) signUp çağrısı hiç kod göndermez, hesabı doğrudan
+// oturumlu döner — bu durumda kod adımını beklemeden okulu burada kurup
+// dashboard'a yönlendiriyoruz.
+
+export async function fetchSchoolsForDistrict(il, ilce) {
+  if (!il || !ilce) return [];
+  return getSchoolsForDistrict(il, ilce);
+}
+
+export async function startSignup({ email, password, okulAdi, il, ilce, phone }) {
+  const supabase = createClient();
+  const { data, error } = await supabase.auth.signUp({ email, password });
+  if (error) return { error: error.message };
+
+  if (data.session) {
+    const { error: rpcError } = await supabase.rpc('register_school', {
+      p_name: okulAdi,
+      p_city: il,
+      p_district: ilce,
+      p_phone: phone,
+    });
+    if (rpcError) return { error: rpcError.message };
+    redirect('/dashboard');
+  }
+
+  return { ok: true, needsCode: true };
+}
+
+export async function resendSignupCode(email) {
+  const supabase = createClient();
+  const { error } = await supabase.auth.resend({ type: 'signup', email });
+  if (error) return { error: error.message };
+  return { ok: true };
+}
+
+export async function verifySignupCode({ email, code, okulAdi, il, ilce, phone }) {
   const supabase = createClient();
 
-  const email = formData.get('email');
-  const password = formData.get('password');
-  const okulAdi = formData.get('okulAdi');
-  const il = formData.get('il');
-  const ilce = formData.get('ilce');
+  const { error: verifyError } = await supabase.auth.verifyOtp({ email, token: code, type: 'signup' });
+  if (verifyError) return { error: 'Kod hatalı veya süresi dolmuş: ' + verifyError.message };
 
-  // 1) Kullanıcı hesabı oluştur
-  const { data: authData, error: authError } = await supabase.auth.signUp({ email, password });
-  if (authError) {
-    return { error: authError.message };
-  }
-  if (!authData.session) {
-    // Supabase projesinde "Confirm email" açıksa buraya düşer.
-    return {
-      error:
-        'Kayıt oluşturuldu ama e-posta onayı gerekiyor. Pilot testler için Supabase Auth ayarlarından "Confirm email" seçeneğini kapatabilirsin.',
-    };
-  }
-
-  // 2) Okulu oluştur + kullanıcıyı bağla (güvenli RPC fonksiyonu ile, tek adımda)
   const { error: rpcError } = await supabase.rpc('register_school', {
     p_name: okulAdi,
     p_city: il,
     p_district: ilce,
+    p_phone: phone,
   });
-  if (rpcError) {
-    return { error: rpcError.message };
-  }
+  if (rpcError) return { error: rpcError.message };
 
   redirect('/dashboard');
 }

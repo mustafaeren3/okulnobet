@@ -36,5 +36,32 @@ export function getSubscriptionStatus({ status, trialEndsAt, currentPeriodEnd, n
     return { label: 'İptal Edildi', isUsable: false, daysRemaining: 0 };
   }
 
+  if (status === 'frozen') {
+    return { label: 'Dondurulmuş (Yönetici)', isUsable: false, daysRemaining: 0 };
+  }
+
   return { label: 'Bilinmiyor', isUsable: false, daysRemaining: null };
+}
+
+const MAX_TRIAL_RANGE_DAYS = 31;
+
+// Kullanıcı isteği: "deneme sürecinde her e-posta/telefon sadece 1 aylık
+// program oluşturabilir" — deneme durumundaki bir okul, TEK bir "Program
+// Oluştur" çağrısında en fazla ~1 ay (31 gün) genişliğinde bir tarih
+// aralığı üretebilir. Ödemeli (active) planda bu kısıt yok. Saf fonksiyon:
+// tarih farkını hesaplar, DB/UI bilmez.
+export function checkTrialDateRangeAllowed({ status, startDate, endDate }) {
+  if (status !== 'trialing') return { allowed: true };
+
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+  const spanDays = Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+
+  if (spanDays > MAX_TRIAL_RANGE_DAYS) {
+    return {
+      allowed: false,
+      reason: `Deneme sürümünde tek seferde en fazla ${MAX_TRIAL_RANGE_DAYS} günlük bir program oluşturabilirsin (seçtiğin aralık ${spanDays} gün). Devam etmek için abonelik satın al.`,
+    };
+  }
+  return { allowed: true };
 }

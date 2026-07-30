@@ -21,7 +21,7 @@ export async function toggleRule(ruleKey, isActive) {
   try {
     const schoolId = await requireSchoolId(supabase);
     await setHardRuleActive(supabase, schoolId, ruleKey, isActive);
-    revalidatePath('/rules');
+    revalidatePath('/dashboard');
     return { ok: true };
   } catch (e) {
     return { error: e.message };

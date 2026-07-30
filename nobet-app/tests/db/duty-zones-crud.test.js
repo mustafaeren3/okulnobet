@@ -59,4 +59,18 @@ describe('lib/db/dutyZones', () => {
     const list = await getDutyZones(client, schoolId);
     expect(list.find((z) => z.id === zone.id)).toBeUndefined();
   });
+
+  it('priority eşit olan bölgeler eklenme sırasına göre listelenir (alfabetik değil)', async () => {
+    const school2 = await signUpAndRegisterSchool(client, makeTestUser('zones-order', RUN_ID));
+    // Bilerek alfabetik sırayla TERS bir eklenme sırası kullanıyoruz —
+    // eskiden ikincil sıralama 'name' idi, bu da eklenme sırasını değil
+    // alfabetik sırayı yansıtıyordu (rotasyon cursor'ının hangi bölgeye
+    // denk geldiğini kullanıcının beklentisinden farklılaştırıyordu).
+    const zoneZ = await createDutyZone(client, school2, { name: 'ZZZ_TENANT_TEST_ZONE_ORDER_Z' });
+    const zoneA = await createDutyZone(client, school2, { name: 'ZZZ_TENANT_TEST_ZONE_ORDER_A' });
+    const zoneM = await createDutyZone(client, school2, { name: 'ZZZ_TENANT_TEST_ZONE_ORDER_M' });
+
+    const list = await getDutyZones(client, school2);
+    expect(list.map((z) => z.id)).toEqual([zoneZ.id, zoneA.id, zoneM.id]);
+  });
 });

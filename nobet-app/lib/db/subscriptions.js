@@ -4,7 +4,7 @@
 // (SECURITY DEFINER) tarafından oluşturuluyor, bkz.
 // supabase/migrations/0010_subscriptions.sql.
 
-import { getSubscriptionStatus } from '@/lib/engine/subscription';
+import { getSubscriptionStatus, checkTrialDateRangeAllowed } from '@/lib/engine/subscription';
 
 export async function getSubscriptionForSchool(supabase, schoolId) {
   const { data, error } = await supabase
@@ -20,7 +20,11 @@ export async function getSubscriptionForSchool(supabase, schoolId) {
 // bu kontrolün arkasına konur. Savunma amaçlı en derin noktaya kondu
 // (lib/db/bulkSchedule.js'in başı) — hangi çağıran üzerinden gelirse
 // gelsin (UI, ileride başka bir action) atlanamaz.
-export async function requireUsableSubscription(supabase, schoolId) {
+//
+// dateRange verilirse (startDate/endDate) VE okul hâlâ deneme
+// sürümündeyse, "deneme sürecinde en fazla 1 aylık program" kısıtı da
+// burada uygulanır (bkz. lib/engine/subscription.js checkTrialDateRangeAllowed).
+export async function requireUsableSubscription(supabase, schoolId, dateRange) {
   const subscription = await getSubscriptionForSchool(supabase, schoolId);
   if (!subscription) {
     throw new Error('Bu okul için abonelik kaydı bulunamadı. Lütfen destek ile iletişime geçin.');
@@ -32,5 +36,16 @@ export async function requireUsableSubscription(supabase, schoolId) {
   });
   if (!status.isUsable) {
     throw new Error(`Abonelik durumu: ${status.label}. Devam etmek için Hesabım sayfasını kontrol edin.`);
+  }
+
+  if (dateRange) {
+    const rangeCheck = checkTrialDateRangeAllowed({
+      status: subscription.status,
+      startDate: dateRange.startDate,
+      endDate: dateRange.endDate,
+    });
+    if (!rangeCheck.allowed) {
+      throw new Error(rangeCheck.reason);
+    }
   }
 }

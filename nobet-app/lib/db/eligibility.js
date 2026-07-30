@@ -8,19 +8,25 @@ import { getTeacherById, getTeachers } from './teachers';
 import { getDutyZoneById } from './dutyZones';
 import { getUnavailableWeekdays, getUnavailableWeekdaysForTeachers } from './teacherAvailability';
 import { getZoneClosures } from './zoneClosures';
-import { getAssignmentCountForTeacherDate, getAssignmentCountsForDate, getTotalAssignmentCounts } from './dutyAssignments';
+import {
+  getAssignmentCountForTeacherDate,
+  getAssignmentCountsForDate,
+  getAssignmentCountsForWeek,
+  getTotalAssignmentCounts,
+} from './dutyAssignments';
 import { getActiveHardRuleKeys } from './rules';
 import { checkHardRules } from '@/lib/engine/rules';
 import { getWeekday } from '@/lib/engine/weekday';
 import { selectFairest } from '@/lib/engine/selectFairest';
 
 export async function checkAssignmentEligibility(supabase, { schoolId, teacherId, zoneId, date }) {
-  const [teacher, zone, unavailableWeekdays, closures, existingAssignmentCountForDate, activeRuleKeys] = await Promise.all([
+  const [teacher, zone, unavailableWeekdays, closures, existingAssignmentCountForDate, weekCounts, activeRuleKeys] = await Promise.all([
     getTeacherById(supabase, teacherId),
     getDutyZoneById(supabase, zoneId),
     getUnavailableWeekdays(supabase, teacherId),
     getZoneClosures(supabase, zoneId),
     getAssignmentCountForTeacherDate(supabase, teacherId, date),
+    getAssignmentCountsForWeek(supabase, schoolId, date),
     getActiveHardRuleKeys(supabase, schoolId),
   ]);
 
@@ -33,6 +39,7 @@ export async function checkAssignmentEligibility(supabase, { schoolId, teacherId
       date,
       weekday: getWeekday(date),
       existingAssignmentCountForDate,
+      existingAssignmentCountForWeek: weekCounts[teacherId] || 0,
     },
     { activeRuleKeys }
   );
@@ -51,9 +58,10 @@ export async function getEligibleTeachersForZone(supabase, { schoolId, zoneId, d
   ]);
 
   const teacherIds = teachers.map((t) => t.id);
-  const [unavailableByTeacher, assignmentCountsByTeacher] = await Promise.all([
+  const [unavailableByTeacher, assignmentCountsByTeacher, weekCounts] = await Promise.all([
     getUnavailableWeekdaysForTeachers(supabase, teacherIds),
     getAssignmentCountsForDate(supabase, schoolId, date),
+    getAssignmentCountsForWeek(supabase, schoolId, date),
   ]);
 
   const weekday = getWeekday(date);
@@ -68,6 +76,7 @@ export async function getEligibleTeachersForZone(supabase, { schoolId, zoneId, d
         date,
         weekday,
         existingAssignmentCountForDate: assignmentCountsByTeacher[teacher.id] || 0,
+        existingAssignmentCountForWeek: weekCounts[teacher.id] || 0,
       },
       { activeRuleKeys }
     );
@@ -77,8 +86,9 @@ export async function getEligibleTeachersForZone(supabase, { schoolId, zoneId, d
 
 // Bir bölge+tarih için uygun adaylar arasından zone.required_count kadar
 // öğretmen seçer. Seçim ölçütü: basit adillik — o ana kadar toplamda en
-// az nöbet tutmuş olan(lar). rotations tablosu tabanlı gerçek rotasyon
-// algoritması bilinçli olarak kapsam dışı (PHASE_REPORT.md'de işaretli).
+// az nöbet tutmuş olan(lar). Haftalık sıralı yer değişimi (rotasyon)
+// toplu üretimin işi (lib/db/bulkSchedule.js), bu tekil uç sadece
+// adillikle seçer.
 export async function selectTeachersForZone(supabase, { schoolId, zoneId, date }) {
   const [zone, results, totalCounts] = await Promise.all([
     getDutyZoneById(supabase, zoneId),

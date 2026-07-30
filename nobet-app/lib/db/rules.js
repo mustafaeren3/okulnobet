@@ -8,8 +8,10 @@ export const HARD_RULE_KEYS = [
   'zone_active_day',
   'branch_match',
   'teacher_availability',
+  'teacher_zone_restriction',
   'zone_closure',
   'max_duty_per_day',
+  'max_duty_per_week',
 ];
 
 export const HARD_RULE_LABELS = {
@@ -17,8 +19,10 @@ export const HARD_RULE_LABELS = {
   zone_active_day: 'Bölge, çalışmadığı günlerde kullanılmaz',
   branch_match: 'Öğretmenin branşı bölgenin izinli/yasaklı branş listeleriyle eşleşmeli',
   teacher_availability: 'Öğretmenin gün kısıtına (Sadece seçili günler / Seçili günler hariç) uyulur',
+  teacher_zone_restriction: 'Yer kısıtı olan öğretmen SADECE kendi sabit nöbet yerine atanır',
   zone_closure: 'Kapalı olarak işaretlenen bölge tarih aralıklarında atama yapılmaz',
-  max_duty_per_day: 'Bir öğretmen günde izin verilenden fazla nöbet tutamaz (çift nöbet ayarına göre)',
+  max_duty_per_day: 'Bir öğretmen aynı günde birden fazla nöbet tutamaz',
+  max_duty_per_week: 'Bir öğretmen aynı hafta içinde en fazla 1 nöbet tutar (çift nöbet işaretliyse 2); hakkı dolan öğretmen o hafta başka hiçbir yere atanmaz, uygun kimse kalmazsa hücre boş bırakılır',
 };
 
 export async function getRules(supabase, schoolId) {
