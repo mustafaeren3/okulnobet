@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { createHmac } from 'node:crypto';
 
 // Tenant izolasyon testlerinin ortak kurulumu: iki taraflı "gerçek Supabase
 // projesine karşı geçici okul + kullanıcı oluştur" mantığı burada tek yerde
@@ -60,4 +61,40 @@ export async function signUpAndRegisterSchool(client, user) {
     throw new Error(`register_school başarısız (${user.email}): ${rpcError.message}`);
   }
   return schoolId;
+}
+
+// ── TOTP (RFC 6238) — admin MFA testlerinin (aal2'ye ulaşmak için)
+// tarayıcısız, kütüphanesiz kod üretmesi için. Node'un yerleşik crypto'su
+// yeterli, yeni bir bağımlılık gerekmedi. Sadece testlerde kullanılır.
+function base32Decode(input) {
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+  const clean = input.toUpperCase().replace(/=+$/, '');
+  let bits = '';
+  for (const char of clean) {
+    const val = alphabet.indexOf(char);
+    if (val === -1) continue;
+    bits += val.toString(2).padStart(5, '0');
+  }
+  const bytes = [];
+  for (let i = 0; i + 8 <= bits.length; i += 8) {
+    bytes.push(parseInt(bits.slice(i, i + 8), 2));
+  }
+  return Buffer.from(bytes);
+}
+
+export function computeTotp(base32Secret, timeStepSeconds = 30, digits = 6, forTime = Date.now()) {
+  const key = base32Decode(base32Secret);
+  const counter = Math.floor(forTime / 1000 / timeStepSeconds);
+  const counterBuf = Buffer.alloc(8);
+  counterBuf.writeBigUInt64BE(BigInt(counter));
+
+  const hmac = createHmac('sha1', key).update(counterBuf).digest();
+  const offset = hmac[hmac.length - 1] & 0x0f;
+  const truncated =
+    ((hmac[offset] & 0x7f) << 24) |
+    ((hmac[offset + 1] & 0xff) << 16) |
+    ((hmac[offset + 2] & 0xff) << 8) |
+    (hmac[offset + 3] & 0xff);
+
+  return String(truncated % 10 ** digits).padStart(digits, '0');
 }

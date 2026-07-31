@@ -27,8 +27,10 @@ import { getUnavailableWeekdaysForTeachers } from './teacherAvailability';
 import { getZoneClosuresForZones } from './zoneClosures';
 import { getCalendarDays } from './calendarDays';
 import { getActiveHardRuleKeys } from './rules';
-import { requireUsableSubscription } from './subscriptions';
+import { requireUsableSubscription, incrementFreeGenerationUsage, logScheduleGeneration } from './subscriptions';
 import { getSchoolRotationMode } from './schoolContext';
+import { isPremium, buildMonthList } from '@/lib/engine/access';
+import { computeFairnessScore, estimateMinutesSaved } from '@/lib/engine/fairness';
 import {
   deleteAutoAssignmentsInRange,
   createAssignments,
@@ -58,10 +60,15 @@ const monthKey = (dateStr) => dateStr.slice(0, 7); // 'YYYY-MM'
 // boş kalacağını PROGRAM OLUŞTURMADAN ÖNCE sor." Gerçek çalıştırmadan
 // önce bu modla önizleme yapılıp idareciye onaylatılır.
 export async function generateBulkSchedule(supabase, { schoolId, startDate, endDate, dryRun = false }) {
-  // 0) Deneme süresi dolmuş / aboneliği kullanılamaz okullar program
-  // üretemez. En derin noktada kontrol edilir (savunma amaçlı). Deneme
-  // sürümündeyse tarih aralığı da burada sınırlanır (en fazla ~1 ay).
-  await requireUsableSubscription(supabase, schoolId, { startDate, endDate });
+  const t0 = Date.now();
+
+  // 0) Aboneliği kullanılamaz (expired/canceled/frozen) okullar program
+  // üretemez. En derin noktada kontrol edilir (savunma amaçlı). Ücretsiz
+  // planın "1 kez tam üretim" kısıtı BURADA değil, çağıran action
+  // katmanında (bkz. lib/db/subscriptions.js requireCanGenerateSchedule
+  // üzerindeki not — bu fonksiyonun kendisi rotasyon sürekliliği için
+  // birden fazla kez çağrılabilir olmalı, bkz. tests/db/bulkSchedule.test.js).
+  const subscription = await requireUsableSubscription(supabase, schoolId);
 
   // 1) İdempotency: bu aralıktaki eski otomatik atamaları temizle,
   // elle düzenlenmiş (is_manual=true) satırlara dokunma. dryRun'da DB'ye
@@ -437,5 +444,33 @@ export async function generateBulkSchedule(supabase, { schoolId, startDate, endD
 
   // 6) Tek toplu yazma.
   const created = await createAssignments(supabase, schoolId, newAssignments);
-  return { createdCount: created.length, emptySlots };
+
+  // 7) Başarı ekranı + analytics için özet metrikler (Faz 9). Adalet
+  // puanı TÜM aktif öğretmenler üzerinden hesaplanır (0 nöbetli bir
+  // öğretmen de dağılıma dahil edilmeli, yoksa skor yapay şekilde yüksek
+  // çıkar) — sadece dutyCountByTeacher'da anahtarı olanlar değil.
+  const fullDutyCounts = Object.fromEntries(teachers.map((t) => [t.id, dutyCountByTeacher[t.id] || 0]));
+  const stats = {
+    totalDutyCount: created.length,
+    teacherCount: teachers.length,
+    zoneCount,
+    conflictCount: emptySlots.length,
+    fairnessScore: computeFairnessScore(fullDutyCounts),
+    durationMs: Date.now() - t0,
+    estimatedMinutesSaved: estimateMinutesSaved(created.length),
+  };
+
+  await logScheduleGeneration(supabase, {
+    durationMs: stats.durationMs,
+    createdCount: stats.totalDutyCount,
+    teacherCount: stats.teacherCount,
+    zoneCount: stats.zoneCount,
+    conflictCount: stats.conflictCount,
+    fairnessScore: stats.fairnessScore,
+  });
+  if (!isPremium(subscription)) {
+    await incrementFreeGenerationUsage(supabase);
+  }
+
+  return { createdCount: created.length, emptySlots, stats, months: buildMonthList(startDate, endDate) };
 }

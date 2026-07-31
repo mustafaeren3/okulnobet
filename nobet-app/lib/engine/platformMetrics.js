@@ -1,16 +1,18 @@
 // Süper admin paneli özet metrikleri — saf fonksiyon, DB/Next.js bilmez.
 // Girdi: lib/db/platformAdmin.js'in platform_list_schools() RPC'sinden
 // dönen düz satırlar (school_id, teacher_count, subscription_status,
-// trial_ends_at, current_period_end, created_at, ...).
+// plan_type, created_at, ...).
 //
-// Ciro SADECE gerçekten ödemeli (status='active') okullar üzerinden
-// hesaplanır — deneme sürümündeki okullar henüz gelir üretmiyor (ödeme
-// entegrasyonu yok, bkz. 0010_subscriptions.sql). Fiyat kademesi
-// SAKLANMIYOR, her okulun GÜNCEL öğretmen sayısına göre canlı hesaplanır
-// (lib/engine/pricing.js ile aynı ilke).
+// Faz "Admin v2": eski trial-tabanlı durumlar şemadan kaldırıldı (bkz.
+// lib/engine/subscription.js) — ücretsiz (plan_type='free') okullar da
+// artık status='active' oluyor, bu yüzden "premium mi" sorusu SADECE
+// status'a değil plan_type'a da bakmalı (bkz. lib/engine/access.js
+// isPremium — burada da aynı iki-koşullu mantık kullanılıyor, tek
+// kaynaktan sapmasın diye import ediliyor).
 
-import { getPricingTier } from './pricing';
+import { STANDARD_YEARLY_PRICE } from './pricing';
 import { getSubscriptionStatus } from './subscription';
+import { isPremium } from './access';
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -18,23 +20,34 @@ export function computePlatformMetrics(schools, now = new Date()) {
   const activeSchoolCount = schools.filter((s) =>
     getSubscriptionStatus({
       status: s.subscription_status,
-      trialEndsAt: s.trial_ends_at,
       currentPeriodEnd: s.current_period_end,
       now,
     }).isUsable
   ).length;
 
+  const freeSchoolCount = schools.filter((s) => s.plan_type === 'free').length;
+  const standardSchoolCount = schools.filter((s) => s.plan_type === 'standard').length;
+  const enterpriseSchoolCount = schools.filter((s) => s.plan_type === 'enterprise').length;
+  const premiumSchoolCount = schools.filter((s) =>
+    isPremium({ status: s.subscription_status, plan_type: s.plan_type })
+  ).length;
+  const conversionRate = schools.length ? premiumSchoolCount / schools.length : 0;
+
   const weekAgo = new Date(now.getTime() - WEEK_MS);
   const newThisWeekCount = schools.filter((s) => new Date(s.created_at) >= weekAgo).length;
 
-  // teacher_count RPC'den Postgres bigint olarak gelir — Supabase JS
-  // istemcisi bunu (hassasiyet kaybını önlemek için) STRING döner, bu
-  // yüzden getPricingTier'a vermeden önce Number()'a çevriliyor (aksi
-  // halde Number.isFinite bir string'i "sonlu değil" sayıp herkesi en
-  // düşük kademeye düşürür).
-  const estimatedMonthlyRevenue = schools
-    .filter((s) => s.subscription_status === 'active')
-    .reduce((sum, s) => sum + getPricingTier(Number(s.teacher_count)).monthly, 0);
+  const estimatedAnnualRevenue = premiumSchoolCount * STANDARD_YEARLY_PRICE;
+  const estimatedMonthlyRevenue = estimatedAnnualRevenue / 12;
 
-  return { activeSchoolCount, newThisWeekCount, estimatedMonthlyRevenue };
+  return {
+    activeSchoolCount,
+    freeSchoolCount,
+    standardSchoolCount,
+    enterpriseSchoolCount,
+    premiumSchoolCount,
+    conversionRate,
+    newThisWeekCount,
+    estimatedMonthlyRevenue,
+    estimatedAnnualRevenue,
+  };
 }

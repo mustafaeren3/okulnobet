@@ -4,10 +4,27 @@ import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { requireSchoolId, setSchoolRotationMode, updateSchoolProfileFields } from '@/lib/db/schoolContext';
 import { generateBulkSchedule } from '@/lib/db/bulkSchedule';
-import { getAssignmentsForRange, createManualAssignment, deleteAssignment } from '@/lib/db/dutyAssignments';
+import {
+  getAssignmentsForRange,
+  createManualAssignment,
+  deleteAssignment,
+  getEarliestAssignmentDate,
+} from '@/lib/db/dutyAssignments';
 import { getTeachers } from '@/lib/db/teachers';
 import { getHolidays, upsertHolidays, deleteCalendarDay } from '@/lib/db/calendarDays';
 import { ACADEMIC_YEAR_2026_2027_HOLIDAYS } from '@/lib/engine/holidays';
+import { requireCanGenerateSchedule, getSubscriptionForSchool } from '@/lib/db/subscriptions';
+import { createShare, removeShare } from '@/lib/db/scheduleShares';
+import { isPremium, canAccessFeature, FEATURES, getUnlockedMonthKey, isMonthUnlocked } from '@/lib/engine/access';
+
+// Bu okulun "açık ay" referansı — hiç generate edilmemişse null.
+// Ücretsiz planda kilitli olmayan TEK ay budur, kaç kez yeniden
+// üretilirse üretilsin sabit kalır (bkz. lib/db/dutyAssignments.js
+// getEarliestAssignmentDate).
+async function getUnlockedMonthKeyForSchool(supabase, schoolId) {
+  const earliestDate = await getEarliestAssignmentDate(supabase, schoolId);
+  return earliestDate ? getUnlockedMonthKey(earliestDate) : null;
+}
 
 export async function runBulkSchedule(startDate, endDate) {
   const supabase = createClient();
@@ -16,10 +33,29 @@ export async function runBulkSchedule(startDate, endDate) {
     if (!startDate || !endDate) throw new Error('Başlangıç ve bitiş tarihi giriniz.');
     if (endDate < startDate) throw new Error('Bitiş tarihi başlangıçtan önce olamaz.');
 
+    // Faz 9: ücretsiz plan TOPLAM 1 kez tam üretim yapabilir — bu kısıt
+    // motorun kendisinde değil (bkz. lib/db/subscriptions.js üzerindeki
+    // not), burada, gerçek UI akışının girdiği noktada uygulanır.
+    await requireCanGenerateSchedule(supabase, schoolId);
+
     const result = await generateBulkSchedule(supabase, { schoolId, startDate, endDate });
-    const rows = await getAssignmentsForRange(supabase, schoolId, startDate, endDate);
+
+    const subscription = await getSubscriptionForSchool(supabase, schoolId);
+    const unlockedMonthKey = await getUnlockedMonthKeyForSchool(supabase, schoolId);
+    const unlockedMonth = result.months.find((m) => m.key === unlockedMonthKey);
+
+    // Ücretsiz planda satır verisi (rows) sadece açık aya kırpılmış
+    // gönderilir — ay sekmelerinin ETİKETLERİ (result.months) hassas
+    // değil, ama gerçek atama verisi kilitli aylar için client'a HİÇ
+    // gitmiyor (devtools'tan okunamasın diye, bkz. teknik plan notu).
+    const rows = isPremium(subscription)
+      ? await getAssignmentsForRange(supabase, schoolId, startDate, endDate)
+      : unlockedMonth
+        ? await getAssignmentsForRange(supabase, schoolId, unlockedMonth.firstDate, unlockedMonth.lastDate)
+        : [];
+
     revalidatePath('/dashboard');
-    return { ...result, rows };
+    return { ...result, rows, unlockedMonthKey };
   } catch (e) {
     return { error: e.message };
   }
@@ -28,7 +64,9 @@ export async function runBulkSchedule(startDate, endDate) {
 // Gerçek üretimden ÖNCE çağrılır: DB'ye hiç dokunmadan aynı motoru
 // çalıştırıp hangi (gün, bölge) hücrelerinin öğretmen yetersizliğinden
 // BOŞ kalacağını döner — idareci "Program Oluştur"a basmadan önce
-// bunu görüp onaylar/vazgeçer.
+// bunu görüp onaylar/vazgeçer. "1 kez" kısıtı burada da uygulanır —
+// aksi halde ücretsiz bir okul hakkını kullandıktan sonra hâlâ önizleme
+// yapıp "Devam etmek istiyor musun?" diyaloğuna kadar ilerleyebilirdi.
 export async function previewBulkSchedule(startDate, endDate) {
   const supabase = createClient();
   try {
@@ -36,8 +74,34 @@ export async function previewBulkSchedule(startDate, endDate) {
     if (!startDate || !endDate) throw new Error('Başlangıç ve bitiş tarihi giriniz.');
     if (endDate < startDate) throw new Error('Bitiş tarihi başlangıçtan önce olamaz.');
 
+    await requireCanGenerateSchedule(supabase, schoolId);
+
     const result = await generateBulkSchedule(supabase, { schoolId, startDate, endDate, dryRun: true });
     return { emptySlots: result.emptySlots };
+  } catch (e) {
+    return { error: e.message };
+  }
+}
+
+// Program sekmesindeki ay sekmelerinin veri kaynağı. Kilitli bir ay
+// istenirse veri HİÇ dönmez ({ locked: true }) — client'a gönderilmeyen
+// veri devtools'tan da okunamaz.
+export async function fetchScheduleMonth(monthKey) {
+  const supabase = createClient();
+  try {
+    const schoolId = await requireSchoolId(supabase);
+    if (!monthKey) throw new Error('Ay belirtilmedi.');
+
+    const subscription = await getSubscriptionForSchool(supabase, schoolId);
+    const unlockedMonthKey = await getUnlockedMonthKeyForSchool(supabase, schoolId);
+    if (!isMonthUnlocked(monthKey, unlockedMonthKey, subscription)) {
+      return { locked: true };
+    }
+
+    const [y, m] = monthKey.split('-').map(Number);
+    const lastDay = new Date(y, m, 0).getDate();
+    const rows = await getAssignmentsForRange(supabase, schoolId, `${monthKey}-01`, `${monthKey}-${String(lastDay).padStart(2, '0')}`);
+    return { rows };
   } catch (e) {
     return { error: e.message };
   }
@@ -85,6 +149,9 @@ export async function updateSchoolAssistantPrincipalName(name) {
   }
 }
 
+// Serbest tarih aralığı sorgusu = "Geçmiş programlar" özelliği (idareci
+// az önce üretilenin dışında bir aralık istiyor). Premium'a kilitli —
+// bkz. lib/engine/access.js FEATURES.VIEW_HISTORY.
 export async function fetchScheduleView(startDate, endDate) {
   const supabase = createClient();
   try {
@@ -92,8 +159,43 @@ export async function fetchScheduleView(startDate, endDate) {
     if (!startDate || !endDate) throw new Error('Başlangıç ve bitiş tarihi giriniz.');
     if (endDate < startDate) throw new Error('Bitiş tarihi başlangıçtan önce olamaz.');
 
+    const subscription = await getSubscriptionForSchool(supabase, schoolId);
+    if (!canAccessFeature(subscription, FEATURES.VIEW_HISTORY)) {
+      return { locked: true, error: 'Bu özellik Premium\'e özel.' };
+    }
+
     const rows = await getAssignmentsForRange(supabase, schoolId, startDate, endDate);
     return { rows };
+  } catch (e) {
+    return { error: e.message };
+  }
+}
+
+// Paylaşım bağlantısı — Premium'e özel (bkz. FEATURES.SHARE_SCHEDULE).
+// DB seviyesindeki gerçek kontrol create_schedule_share SQL fonksiyonunda
+// tekrarlanıyor (savunma amaçlı); buradaki kontrol kullanıcıya erken ve
+// anlaşılır bir hata mesajı vermek için.
+export async function createShareLink(startDate, endDate) {
+  const supabase = createClient();
+  try {
+    const schoolId = await requireSchoolId(supabase);
+    const subscription = await getSubscriptionForSchool(supabase, schoolId);
+    if (!canAccessFeature(subscription, FEATURES.SHARE_SCHEDULE)) {
+      return { locked: true, error: 'Paylaşım özelliği Premium\'e özel.' };
+    }
+    const token = await createShare(supabase, { startDate, endDate });
+    return { token };
+  } catch (e) {
+    return { error: e.message };
+  }
+}
+
+export async function removeShareLink() {
+  const supabase = createClient();
+  try {
+    const schoolId = await requireSchoolId(supabase);
+    await removeShare(supabase, schoolId);
+    return { ok: true };
   } catch (e) {
     return { error: e.message };
   }

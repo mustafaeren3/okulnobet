@@ -1,8 +1,15 @@
 node_modules/
 .next/
+.env
 .env.local
+.env*.local
 *.log
 test-results/
 playwright-report/
 coverage/
 **/supabase/.temp/
+
+# K2 güvenlik bulgusu: "tüm klasörü ziple" tipi export'lar .env.local +
+# node_modules + .next içerip kimlik bilgisi sızdırabilir (bkz.
+# PHASE_REPORT.md). Proje kökünde/export'larda zip barındırılmasın.
+*.zip

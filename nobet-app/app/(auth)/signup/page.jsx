@@ -101,7 +101,7 @@ export default function SignupPage() {
     <div className="auth-root">
       <div className="auth-card" style={{ maxWidth: 460 }}>
         <Link href="/" className="auth-logo">NÖBET SİSTEMİ</Link>
-        <div className="auth-subtitle">Okulunu kaydet, 14 gün ücretsiz dene</div>
+        <div className="auth-subtitle">Okulunu ücretsiz kaydet, hemen programını oluştur</div>
         <h1>{phase === 'form' ? 'Okulunu Kaydet' : 'E-postanı Onayla'}</h1>
 
         {phase === 'form' && (

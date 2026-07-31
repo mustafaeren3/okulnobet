@@ -1,40 +1,52 @@
-'use client';
-
-import { useState } from 'react';
 import Link from 'next/link';
-import { PRICING_TIERS, formatTL } from '@/lib/engine/pricing';
+import { STANDARD_YEARLY_PRICE, formatTL } from '@/lib/engine/pricing';
 
-const TIER_LABELS = {
-  tier_0_20: '0–20 Öğretmen',
-  tier_21_40: '21–40 Öğretmen',
-  tier_41_60: '41–60 Öğretmen',
-  tier_61_plus: '61+ Öğretmen',
-};
+const FREE_FEATURES = ['Program oluşturabilir', 'İlk ayı görüntüleyebilir', 'Ürünü deneyebilir'];
+const STANDARD_FEATURES = [
+  'Tüm dönemi görüntüleme', 'Word çıktısı', 'PDF çıktısı', 'Yazdırma',
+  'Excel dışa aktarma', 'Programı paylaşma', 'Geçmiş programlar', 'Sınırsız yeniden oluşturma',
+];
 
 export default function FiyatlandirmaPage() {
-  const [interval, setInterval] = useState('monthly');
-
   return (
     <main className="mkt-main">
       <div className="mkt-hero" style={{ padding: '20px 0 8px' }}>
         <h1>Fiyatlandırma</h1>
-        <p>Okulunun öğretmen sayısına göre basit, şeffaf fiyatlandırma. Gizli ücret yok.</p>
-      </div>
-
-      <div className="mkt-billing-toggle">
-        <button className={interval === 'monthly' ? 'active' : ''} onClick={() => setInterval('monthly')}>Aylık</button>
-        <button className={interval === 'yearly' ? 'active' : ''} onClick={() => setInterval('yearly')}>Yıllık</button>
+        <p>Basit, şeffaf paketler. Gizli ücret yok.</p>
       </div>
 
       <div className="mkt-pricing-grid">
-        {PRICING_TIERS.map((tier, i) => (
-          <div key={tier.key} className={`mkt-pricing-card ${i === 1 ? 'mkt-pricing-highlight' : ''}`}>
-            <div className="mkt-tier-label">{TIER_LABELS[tier.key]}</div>
-            <div className="mkt-price">{formatTL(interval === 'monthly' ? tier.monthly : tier.yearly)}</div>
-            <div className="mkt-price-sub">{interval === 'monthly' ? '/ ay' : '/ yıl'}</div>
-            <Link href="/signup" className="mkt-btn mkt-btn-primary" style={{ width: '100%' }}>14 Gün Ücretsiz Dene</Link>
-          </div>
-        ))}
+        <div className="mkt-pricing-card">
+          <div className="mkt-tier-label">Ücretsiz</div>
+          <div className="mkt-price">0 ₺</div>
+          <div className="mkt-price-sub">her zaman</div>
+          <ul style={{ listStyle: 'none', padding: 0, margin: '16px 0', display: 'grid', gap: 8, fontSize: 13, textAlign: 'left' }}>
+            {FREE_FEATURES.map((f) => <li key={f}>✓ {f}</li>)}
+          </ul>
+          <Link href="/signup" className="mkt-btn mkt-btn-primary" style={{ width: '100%' }}>Ücretsiz Kayıt Ol</Link>
+        </div>
+
+        <div className="mkt-pricing-card mkt-pricing-highlight">
+          <div className="mkt-tier-label">Standart</div>
+          <div className="mkt-price">{formatTL(STANDARD_YEARLY_PRICE)}</div>
+          <div className="mkt-price-sub">/ yıl</div>
+          <ul style={{ listStyle: 'none', padding: 0, margin: '16px 0', display: 'grid', gap: 8, fontSize: 13, textAlign: 'left' }}>
+            {STANDARD_FEATURES.map((f) => <li key={f}>✔ {f}</li>)}
+          </ul>
+          <Link href="/signup" className="mkt-btn mkt-btn-primary" style={{ width: '100%' }}>Ücretsiz Kayıt Ol</Link>
+        </div>
+
+        <div className="mkt-pricing-card">
+          <div className="mkt-tier-label">Kurumsal</div>
+          <div className="mkt-price" style={{ fontSize: 22 }}>Teklif Al</div>
+          <div className="mkt-price-sub">okul grupları / ilçe-il müdürlükleri</div>
+          <ul style={{ listStyle: 'none', padding: 0, margin: '16px 0', display: 'grid', gap: 8, fontSize: 13, textAlign: 'left' }}>
+            <li>✔ Standart'taki her şey</li>
+            <li>✔ Çoklu okul yönetimi</li>
+            <li>✔ Özel entegrasyon desteği</li>
+          </ul>
+          <Link href="/kurumsal" className="mkt-btn mkt-btn-primary" style={{ width: '100%' }}>Teklif Al</Link>
+        </div>
       </div>
 
       <div className="mkt-section">

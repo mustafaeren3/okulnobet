@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
-import { PRICING_TIERS, formatTL } from '@/lib/engine/pricing';
+import { STANDARD_YEARLY_PRICE, formatTL } from '@/lib/engine/pricing';
 import './(marketing)/marketing.css';
 
 // Kök `/` route'u — (marketing) route group'un DIŞINDA (parantezli
@@ -37,7 +37,7 @@ export default async function Home() {
             Öğretmenlerini ve nöbet bölgelerini tanımla, gerisini sisteme bırak.
           </p>
           <div className="mkt-hero-actions">
-            <Link href="/signup" className="mkt-btn mkt-btn-primary mkt-btn-lg">14 Gün Ücretsiz Dene</Link>
+            <Link href="/signup" className="mkt-btn mkt-btn-primary mkt-btn-lg">Ücretsiz Kayıt Ol</Link>
             <Link href="/fiyatlandirma" className="mkt-btn mkt-btn-outline mkt-btn-lg">Fiyatlandırmayı Gör</Link>
           </div>
         </div>
@@ -69,17 +69,26 @@ export default async function Home() {
         </div>
 
         <div className="mkt-section">
-          <h2>Öğretmen Sayına Göre Fiyatlandırma</h2>
+          <h2>Basit, Şeffaf Fiyatlandırma</h2>
           <div className="mkt-pricing-grid">
-            {PRICING_TIERS.map((tier, i) => (
-              <div key={tier.key} className={`mkt-pricing-card ${i === 1 ? 'mkt-pricing-highlight' : ''}`}>
-                <div className="mkt-price">{formatTL(tier.monthly)}</div>
-                <div className="mkt-price-sub">/ ay</div>
-              </div>
-            ))}
+            <div className="mkt-pricing-card">
+              <div className="mkt-tier-label">Ücretsiz</div>
+              <div className="mkt-price">0 ₺</div>
+              <div className="mkt-price-sub">ilk ayı görüntüle</div>
+            </div>
+            <div className="mkt-pricing-card mkt-pricing-highlight">
+              <div className="mkt-tier-label">Standart</div>
+              <div className="mkt-price">{formatTL(STANDARD_YEARLY_PRICE)}</div>
+              <div className="mkt-price-sub">/ yıl</div>
+            </div>
+            <div className="mkt-pricing-card">
+              <div className="mkt-tier-label">Kurumsal</div>
+              <div className="mkt-price" style={{ fontSize: 22 }}>Teklif Al</div>
+              <div className="mkt-price-sub">okul grupları</div>
+            </div>
           </div>
           <div style={{ textAlign: 'center', marginTop: 20 }}>
-            <Link href="/fiyatlandirma" className="mkt-btn mkt-btn-outline">Tüm Planları ve Yıllık Fiyatları Gör</Link>
+            <Link href="/fiyatlandirma" className="mkt-btn mkt-btn-outline">Tüm Planları Gör</Link>
           </div>
         </div>
       </main>

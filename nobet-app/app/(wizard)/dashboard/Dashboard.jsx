@@ -8,7 +8,8 @@ import { getWeekday, DAY_TR } from '@/lib/engine/weekday';
 import { eachDateStr } from '@/lib/engine/scheduler';
 import { HARD_RULE_KEYS, HARD_RULE_LABELS } from '@/lib/db/rules';
 import { getSubscriptionStatus } from '@/lib/engine/subscription';
-import { getPricingTier, formatTL } from '@/lib/engine/pricing';
+import { STANDARD_YEARLY_PRICE, formatTL } from '@/lib/engine/pricing';
+import { isPremium, canAccessFeature, FEATURES } from '@/lib/engine/access';
 import {
   addTeacher,
   editTeacher,
@@ -25,14 +26,18 @@ import {
   updateSchoolPrincipalName,
   updateSchoolAssistantPrincipalName,
   fetchScheduleView,
+  fetchScheduleMonth,
   fetchTeacherOptions,
   addManualAssignment,
   removeAssignment,
   addHoliday,
   removeHoliday,
   loadDefaultHolidays,
+  createShareLink,
+  removeShareLink,
 } from '../schedule/actions';
 import { toggleRule } from '../rules/actions';
+import PremiumScreen from './PremiumScreen';
 import './dashboard.css';
 
 // Faz 7.3: kullanıcı ilk tasarıma (tek sayfa, 3 sekme: Ayarlar/Program/
@@ -190,6 +195,25 @@ function groupDatesByWeek(dates) {
     cur.push(date);
   }
   return weeks;
+}
+
+// CSV/PDF/Excel export'larının üçü de aynı "tarih × bölge" hücre
+// metnini farklı bir dosya biçimine döküyor — tekrarlanan hücre-metni
+// mantığını (tatil satırı / dolu hücrelerin isim listesi) tek yerde
+// toplar (2. somut kullanımda soyutlama eşiği geçildi, CLAUDE.md
+// sadelik kuralına uygun). Saf: DOM/Blob bilmez, sadece dizi döner.
+function buildExportGrid(table, holidaysByDate) {
+  const header = ['TARİH', 'GÜN', ...table.zoneNames];
+  const rows = table.dates.map((date) => {
+    const holidayDesc = holidaysByDate.get(date);
+    const dayLabel = DAY_TR[getWeekday(date)];
+    if (holidayDesc !== undefined) {
+      return [formatDate(date), dayLabel, ...table.zoneNames.map(() => `Tatil${holidayDesc ? ` — ${holidayDesc}` : ''}`)];
+    }
+    const cells = table.zoneNames.map((z) => (table.cellMap[date]?.[z] || []).map((e) => e.name).join(' / '));
+    return [formatDate(date), dayLabel, ...cells];
+  });
+  return { header, rows };
 }
 
 function ScheduleCell({ date, zoneId, entries, teacherOptions, onRefresh }) {
@@ -519,6 +543,16 @@ export default function Dashboard({
   // girişlerini değiştirip henüz "Oluştur"a basılmamışsa değişmez.
   const [viewedRange, setViewedRange] = useState(null);
 
+  // ── FEATURE GATING (Faz 9) ──────────────────────────────
+  // months: son üretilen programın ay listesi + kilit durumu (ay
+  // ETİKETLERİ hassas değil, satır verisi değil — bkz. schedule/actions.js).
+  const [months, setMonths] = useState([]);
+  const [activeMonthKey, setActiveMonthKey] = useState(null);
+  const [loadingMonth, setLoadingMonth] = useState(false);
+  const [successStats, setSuccessStats] = useState(null);
+  const [premiumPrompt, setPremiumPrompt] = useState(null); // 'month' | 'export' | 'history' | 'share' | 'regenerate' | null
+  const isPremiumClient = isPremium(initialSubscription);
+
   const table = useMemo(() => buildScheduleTable(rows, viewedRange, zones), [rows, viewedRange, zones]);
   const weeks = useMemo(() => groupDatesByWeek(table.dates), [table.dates]);
   const holidaysByDate = useMemo(
@@ -532,10 +566,19 @@ export default function Dashboard({
     if (!res.error) setTeacherOptions(res.teachers);
   }
 
+  // Elle atama ekleme/silme sonrası aktif görünümü tazeler. Bir ay
+  // sekmesi seçiliyse fetchScheduleMonth (kilit kontrolü ay bazında,
+  // ücretsiz kullanıcı da kendi açık ayını tazeleyebilmeli); değilse
+  // (premium'un serbest aralık görünümü) fetchScheduleView kullanılır.
   async function refreshView() {
     if (!viewedRange) return;
+    if (activeMonthKey) {
+      const res = await fetchScheduleMonth(activeMonthKey);
+      if (!res.error && !res.locked) setRows(res.rows);
+      return;
+    }
     const res = await fetchScheduleView(viewedRange.start, viewedRange.end);
-    if (!res.error) setRows(res.rows);
+    if (!res.error && !res.locked) setRows(res.rows);
   }
 
   async function handleGenerate() {
@@ -551,7 +594,11 @@ export default function Dashboard({
     setResult(null);
     const preview = await previewBulkSchedule(startDate, endDate);
     setRunning(false);
-    if (preview.error) { setResult(preview); return; }
+    if (preview.error) {
+      setResult(preview);
+      if (/1 program|Premium/i.test(preview.error)) setPremiumPrompt('regenerate');
+      return;
+    }
 
     let confirmMsg =
       `${startDate} – ${endDate} aralığında yeni bir nöbet programı oluşturulacak.\n\n` +
@@ -576,16 +623,44 @@ export default function Dashboard({
     const res = await runBulkSchedule(startDate, endDate);
     setRunning(false);
     setResult(res);
-    setRows(res.rows || []);
-    if (!res.error) setViewedRange({ start: startDate, end: endDate });
-    loadTeacherOptions();
-    if (!res.error) {
-      showToast(`✓ ${res.createdCount} nöbet ataması oluşturuldu`);
-      setActiveTab('program');
+
+    if (res.error) {
+      // "1 kez ücretsiz üretim" kısıtı da bu hata mesajıyla döner —
+      // ayrıca Premium ekranını da açalım, sadece kırmızı yazı yeterli değil.
+      if (/1 program|Premium/i.test(res.error)) setPremiumPrompt('regenerate');
+      return;
     }
+
+    const monthsWithLock = (res.months || []).map((m) => ({
+      ...m,
+      locked: !isPremiumClient && m.key !== res.unlockedMonthKey,
+    }));
+    const activeMonth = monthsWithLock.find((m) => m.key === res.unlockedMonthKey) || monthsWithLock[0] || null;
+
+    setMonths(monthsWithLock);
+    setActiveMonthKey(activeMonth?.key ?? null);
+    setRows(res.rows || []);
+    setViewedRange(activeMonth ? { start: activeMonth.firstDate, end: activeMonth.lastDate } : { start: startDate, end: endDate });
+    loadTeacherOptions();
+    setSuccessStats(res.stats || null);
+  }
+
+  // Ay sekmesine tıklama — kilitliyse SUNUCUYA HİÇ gitmeden Premium
+  // ekranı açılır (gereksiz istek yok, veri zaten client'a gelmemişti).
+  async function handleSelectMonth(month) {
+    if (month.locked) { setPremiumPrompt('month'); return; }
+    setActiveMonthKey(month.key);
+    setLoadingMonth(true);
+    const res = await fetchScheduleMonth(month.key);
+    setLoadingMonth(false);
+    if (res.locked) { setPremiumPrompt('month'); return; }
+    if (res.error) { showToast(res.error, true); return; }
+    setRows(res.rows || []);
+    setViewedRange({ start: month.firstDate, end: month.lastDate });
   }
 
   async function handleView() {
+    if (!isPremiumClient) { setPremiumPrompt('history'); return; }
     if (!startDate || !endDate) { setResult({ error: 'Başlangıç ve bitiş tarihi giriniz.' }); return; }
     if (endDate < startDate) { setResult({ error: 'Bitiş tarihi başlangıçtan önce olamaz.' }); return; }
 
@@ -593,7 +668,10 @@ export default function Dashboard({
     setResult(null);
     const res = await fetchScheduleView(startDate, endDate);
     setViewing(false);
+    if (res.locked) { setPremiumPrompt('history'); return; }
     if (res.error) { setResult(res); return; }
+    setMonths([]);
+    setActiveMonthKey(null);
     setViewedRange({ start: startDate, end: endDate });
     setRows(res.rows);
     loadTeacherOptions();
@@ -654,10 +732,6 @@ export default function Dashboard({
         currentPeriodEnd: initialSubscription.current_period_end,
       })
     : null;
-  // Kademe SAKLANMIYOR — okulun GÜNCEL öğretmen sayısına göre canlı
-  // hesaplanır (bkz. lib/engine/pricing.js üstündeki yorum).
-  const pricingTier = useMemo(() => getPricingTier(teachers.length), [teachers.length]);
-
   // ── DAĞILIM (mevcut yüklü program aralığındaki nöbet sayısı) ───
   const distribution = useMemo(() => {
     const counts = {};
@@ -674,6 +748,7 @@ export default function Dashboard({
 
   // ── EXPORT ───────────────────────────────────────────────
   function exportCSV() {
+    if (!canAccessFeature(initialSubscription, FEATURES.EXPORT_EXCEL)) { setPremiumPrompt('export'); return; }
     if (!table.dates.length) return;
     let csv = 'TARİH,GÜN,' + table.zoneNames.join(',') + '\n';
     table.dates.forEach((date) => {
@@ -700,6 +775,7 @@ export default function Dashboard({
   // doğrudan açar ve TAMAMEN düzenlenebilir (gerçek bir .docx üretmek için
   // ayrı bir kütüphane gerekmez, Word HTML içeriği native olarak okur).
   function exportHTML() {
+    if (!canAccessFeature(initialSubscription, FEATURES.EXPORT_WORD)) { setPremiumPrompt('export'); return; }
     if (!table.dates.length) return;
     const today = new Date();
     const todayStr = `${String(today.getDate()).padStart(2, '0')}.${String(today.getMonth() + 1).padStart(2, '0')}.${today.getFullYear()}`;
@@ -800,6 +876,83 @@ export default function Dashboard({
     a.download = 'ogretmen_nobet_cizelgesi.doc';
     a.click();
     showToast('Word belgesi indirildi');
+  }
+
+  // PDF kütüphanesi (jspdf + jspdf-autotable) sadece tıklanınca dinamik
+  // import edilir — sayfa ilk yüklemesini şişirmesin.
+  async function exportPDF() {
+    if (!canAccessFeature(initialSubscription, FEATURES.EXPORT_PDF)) { setPremiumPrompt('export'); return; }
+    if (!table.dates.length) return;
+    const { jsPDF } = await import('jspdf');
+    const { default: autoTable } = await import('jspdf-autotable');
+    const { header, rows: gridRows } = buildExportGrid(table, holidaysByDate);
+    const doc = new jsPDF({ orientation: 'landscape' });
+    doc.setFontSize(12);
+    doc.text(schoolName, 14, 12);
+    autoTable(doc, { head: [header], body: gridRows, startY: 18, styles: { fontSize: 8 } });
+    doc.save('nobet_programi.pdf');
+    showToast('PDF indirildi');
+  }
+
+  // Gerçek bir .xlsx (OOXML/zip) üretmek ek bir kütüphane (xlsx/exceljs)
+  // gerektiriyordu; ikisi de bilinen güvenlik açığı taşıyan eski/vulnerable
+  // transitive bağımlılıklar getiriyordu (npm audit: xlsx'te düzeltmesi
+  // olmayan prototype pollution/ReDoS, exceljs'in archiver zincirinde
+  // yüksek önem dereceli DoS). Bunun yerine exportHTML (Word) ile AYNI
+  // kanıtlanmış teknik kullanılıyor: Excel, HTML tablosunu native olarak
+  // açabiliyor — .xls uzantısı + application/vnd.ms-excel MIME yeterli,
+  // yeni bağımlılık/güvenlik yüzeyi eklemeden aynı sonucu verir (CLAUDE.md
+  // "iki çözümden basit olanı seç" kuralına uygun, bilinçli karar).
+  function exportExcel() {
+    if (!canAccessFeature(initialSubscription, FEATURES.EXPORT_EXCEL)) { setPremiumPrompt('export'); return; }
+    if (!table.dates.length) return;
+    const { header, rows: gridRows } = buildExportGrid(table, holidaysByDate);
+    const theadHtml = `<tr>${header.map((h) => `<th>${escapeHtml(h)}</th>`).join('')}</tr>`;
+    const tbodyHtml = gridRows
+      .map((row) => `<tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join('')}</tr>`)
+      .join('');
+    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"></head>` +
+      `<body><table border="1"><thead>${theadHtml}</thead><tbody>${tbodyHtml}</tbody></table></body></html>`;
+    const blob = new Blob(['﻿' + html], { type: 'application/vnd.ms-excel' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'nobet_programi.xls';
+    a.click();
+    showToast('Excel indirildi');
+  }
+
+  // Ctrl+P ile tarayıcı-native yazdırmayı tam engellemek mümkün değil —
+  // bu buton ana yol, @media print CSS'i (dashboard.css) sadece tabloyu
+  // gösterir. Bilinçli sınır, bkz. PHASE_REPORT.md "kapsam dışı".
+  function printSchedule() {
+    if (!canAccessFeature(initialSubscription, FEATURES.PRINT)) { setPremiumPrompt('export'); return; }
+    if (!table.dates.length) return;
+    window.print();
+  }
+
+  const [sharingBusy, setSharingBusy] = useState(false);
+  async function handleShare() {
+    if (!canAccessFeature(initialSubscription, FEATURES.SHARE_SCHEDULE)) { setPremiumPrompt('share'); return; }
+    if (!viewedRange) return;
+    setSharingBusy(true);
+    const res = await createShareLink(viewedRange.start, viewedRange.end);
+    setSharingBusy(false);
+    if (res.locked) { setPremiumPrompt('share'); return; }
+    if (res.error) { showToast(res.error, true); return; }
+    const url = `${window.location.origin}/share/${res.token}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      showToast('Paylaşım bağlantısı kopyalandı');
+    } catch {
+      window.prompt('Paylaşım bağlantısı:', url);
+    }
+  }
+
+  async function handleRemoveShare() {
+    setSharingBusy(true);
+    await removeShareLink();
+    setSharingBusy(false);
+    showToast('Paylaşım bağlantısı kaldırıldı');
   }
 
   const sortedHolidayDates = useMemo(
@@ -1167,35 +1320,30 @@ export default function Dashboard({
               {!subscriptionStatus ? (
                 <div style={{ color: 'var(--muted)', fontSize: 13 }}>Abonelik bilgisi bulunamadı.</div>
               ) : (
-                <>
-                  <div className="person-tag" style={{ display: 'inline-block', fontSize: 12, background: subscriptionStatus.isUsable ? 'var(--success)' : 'var(--danger)', color: subscriptionStatus.isUsable ? '#0f2e1a' : '#fff', marginBottom: 8 }}>
-                    {subscriptionStatus.label}
-                  </div>
-                  {subscriptionStatus.daysRemaining !== null && (
-                    <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 8 }}>
-                      {subscriptionStatus.isUsable ? `${subscriptionStatus.daysRemaining} gün kaldı` : 'Kullanım için ödeme gerekiyor'}
-                    </div>
-                  )}
-                </>
+                <div className="person-tag" style={{ display: 'inline-block', fontSize: 12, background: isPremiumClient ? 'var(--success)' : 'var(--accent2)', color: isPremiumClient ? '#0f2e1a' : '#3a2c00', marginBottom: 8 }}>
+                  {isPremiumClient ? '✓ Premium Aktif' : subscriptionStatus.label}
+                </div>
               )}
 
               <div className="sep" />
-              <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>
-                Şu anki öğretmen sayın ({teachers.length}) için planın:
-              </div>
-              <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
-                <div style={{ flex: 1, background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 12px' }}>
-                  <div style={{ fontSize: 10, color: 'var(--muted)', textTransform: 'uppercase' }}>Aylık</div>
-                  <div style={{ fontSize: 18, fontFamily: "'Bebas Neue', sans-serif", color: 'var(--accent)' }}>{formatTL(pricingTier.monthly)}</div>
+              {isPremiumClient ? (
+                <div style={{ fontSize: 13, color: 'var(--muted)' }}>
+                  Tüm dönem, dışa aktarma, paylaşım ve geçmiş kayıtlar açık. Teşekkürler!
                 </div>
-                <div style={{ flex: 1, background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 12px' }}>
-                  <div style={{ fontSize: 10, color: 'var(--muted)', textTransform: 'uppercase' }}>Yıllık</div>
-                  <div style={{ fontSize: 18, fontFamily: "'Bebas Neue', sans-serif", color: 'var(--accent)' }}>{formatTL(pricingTier.yearly)}</div>
-                </div>
-              </div>
+              ) : (
+                <>
+                  <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 10 }}>
+                    Ücretsiz planda ilk ay görüntülenebilir. Standart plan ile tüm dönem, dışa aktarma ve paylaşım açılır:
+                  </div>
+                  <div style={{ background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 12px', marginBottom: 10 }}>
+                    <div style={{ fontSize: 10, color: 'var(--muted)', textTransform: 'uppercase' }}>Standart</div>
+                    <div style={{ fontSize: 20, fontFamily: "'Bebas Neue', sans-serif", color: 'var(--accent)' }}>{formatTL(STANDARD_YEARLY_PRICE)} <span style={{ fontSize: 12, color: 'var(--muted)', fontFamily: 'inherit' }}>/ yıl</span></div>
+                  </div>
+                  <button className="btn btn-success" style={{ width: '100%', marginBottom: 10 }} onClick={() => setPremiumPrompt('account')}>Premium'a Geç</button>
+                </>
+              )}
               <div className="info-box" style={{ marginBottom: 0 }}>
-                💡 Öğretmen sayın arttıkça/azaldıkça fiyat kademesi otomatik güncellenir. Ödeme entegrasyonu hazırlanıyor —
-                şu an için abonelik satın alma aktif değil, deneme sürümü devam ediyor. Tüm planları görmek için{' '}
+                💡 Tüm planları görmek için{' '}
                 <a href="/fiyatlandirma" target="_blank" rel="noreferrer" style={{ color: 'var(--accent)' }}>fiyatlandırma sayfasına</a> bakabilirsin.
               </div>
             </div>
@@ -1221,13 +1369,27 @@ export default function Dashboard({
           </div>
         ) : (
           <div>
+            {months.length > 0 && (
+              <div className="month-tabs">
+                {months.map((m) => (
+                  <button
+                    key={m.key}
+                    className={`month-tab-btn ${activeMonthKey === m.key ? 'active' : ''} ${m.locked ? 'locked' : ''}`}
+                    onClick={() => handleSelectMonth(m)}
+                    disabled={loadingMonth && activeMonthKey === m.key}
+                  >
+                    {m.label}{m.locked ? ' 🔒' : ''}
+                  </button>
+                ))}
+              </div>
+            )}
             <div className="stats-grid">
               <div className="stat-card"><span className="stat-icon">📅</span><div><div className="stat-num">{table.dates.filter((d) => !holidaysByDate.has(d)).length}</div><div className="stat-lbl">Aktif Gün</div></div></div>
               <div className="stat-card"><span className="stat-icon">👥</span><div><div className="stat-num">{teachers.length}</div><div className="stat-lbl">Personel</div></div></div>
               <div className="stat-card"><span className="stat-icon">🏫</span><div><div className="stat-num">{zones.length}</div><div className="stat-lbl">Nöbet Yeri</div></div></div>
               <div className="stat-card"><span className="stat-icon">✅</span><div><div className="stat-num">{rows.length}</div><div className="stat-lbl">Toplam Nöbet</div></div></div>
             </div>
-            <div className="schedule-wrapper">
+            <div className="schedule-wrapper printable-schedule">
               <table className="schedule-table">
                 <thead>
                   <tr>
@@ -1275,8 +1437,12 @@ export default function Dashboard({
               </table>
             </div>
             <div className="export-section">
-              <button className="btn btn-primary btn-lg" onClick={exportCSV}>📥 CSV İndir</button>
-              <button className="btn btn-outline btn-lg" onClick={exportHTML}>🖨️ Yazdır (Word Belgesi)</button>
+              <button className="btn btn-primary btn-lg" onClick={exportCSV}>{isPremiumClient ? '📥' : '🔒'} CSV İndir</button>
+              <button className="btn btn-outline btn-lg" onClick={exportHTML}>{isPremiumClient ? '📄' : '🔒'} Word İndir</button>
+              <button className="btn btn-outline btn-lg" onClick={exportPDF}>{isPremiumClient ? '📄' : '🔒'} PDF İndir</button>
+              <button className="btn btn-outline btn-lg" onClick={exportExcel}>{isPremiumClient ? '📊' : '🔒'} Excel İndir</button>
+              <button className="btn btn-outline btn-lg" onClick={printSchedule}>{isPremiumClient ? '🖨️' : '🔒'} Yazdır</button>
+              <button className="btn btn-outline btn-lg" onClick={handleShare} disabled={sharingBusy}>{isPremiumClient ? '🔗' : '🔒'} Paylaş</button>
             </div>
           </div>
         )}
@@ -1317,6 +1483,48 @@ export default function Dashboard({
 
       <div id="toast" className={toast.visible ? 'show' : ''} style={{ background: toast.isErr ? 'var(--danger)' : 'var(--success)', color: toast.isErr ? '#fff' : '#0f2e1a' }}>
         {toast.msg}
+      </div>
+
+      {successStats && (
+        <SuccessScreen
+          stats={successStats}
+          onContinue={() => { setSuccessStats(null); setActiveTab('program'); }}
+        />
+      )}
+      {premiumPrompt && <PremiumScreen reason={premiumPrompt} onClose={() => setPremiumPrompt(null)} />}
+    </div>
+  );
+}
+
+// Program üretimi bittikten hemen sonra gösterilen başarı ekranı —
+// gerçek verilerden hesaplanan 7 metrik (bkz. lib/db/bulkSchedule.js
+// stats, lib/engine/fairness.js). Tek kullanım yeri burası, ayrı
+// dosyaya çıkarmaya gerek yok (CLAUDE.md YAGNI).
+function SuccessScreen({ stats, onContinue }) {
+  const items = [
+    { icon: '✅', label: 'Toplam Nöbet', value: stats.totalDutyCount },
+    { icon: '👥', label: 'Öğretmen Sayısı', value: stats.teacherCount },
+    { icon: '🏫', label: 'Nöbet Alanı', value: stats.zoneCount },
+    { icon: '⚠️', label: 'Boş Kalan Yer', value: stats.conflictCount },
+    { icon: '⚖️', label: 'Adalet Puanı', value: `${stats.fairnessScore}/100` },
+    { icon: '⏱️', label: 'Oluşturma Süresi', value: `${(stats.durationMs / 1000).toFixed(1)} sn` },
+    { icon: '💡', label: 'Tahmini Zaman Tasarrufu', value: `${Math.round(stats.estimatedMinutesSaved / 60)} saat` },
+  ];
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }}>
+      <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: 28, maxWidth: 460, width: '100%', maxHeight: '90vh', overflowY: 'auto', textAlign: 'center' }}>
+        <div style={{ fontSize: 40, marginBottom: 8 }}>🎉</div>
+        <h2 style={{ fontFamily: "'Bebas Neue', sans-serif", letterSpacing: 1, fontSize: 26, margin: 0 }}>Program başarıyla oluşturuldu</h2>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, margin: '20px 0', textAlign: 'left' }}>
+          {items.map((it) => (
+            <div key={it.label} style={{ background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 12px' }}>
+              <div style={{ fontSize: 11, color: 'var(--muted)' }}>{it.icon} {it.label}</div>
+              <div style={{ fontSize: 18, fontFamily: "'Bebas Neue', sans-serif", color: 'var(--accent)' }}>{it.value}</div>
+            </div>
+          ))}
+        </div>
+        <button className="btn btn-success btn-xl" style={{ width: '100%' }} onClick={onContinue}>Devam Et</button>
       </div>
     </div>
   );

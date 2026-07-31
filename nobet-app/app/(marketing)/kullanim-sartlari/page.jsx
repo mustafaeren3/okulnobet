@@ -27,14 +27,15 @@ export default function KullanimSartlariPage() {
       </div>
 
       <div className="mkt-section">
-        <h2>3. Deneme Süresi ve Abonelik</h2>
+        <h2>3. Ücretsiz Plan ve Abonelik</h2>
         <ul>
-          <li>Yeni kayıtlar 14 gün ücretsiz deneme hakkına sahiptir.</li>
-          <li>Her e-posta adresi ve telefon numarası yalnızca BİR KEZ deneme hesabı açabilir; aynı kişinin
-            birden fazla e-posta ile tekrar deneme oluşturması engellenir.</li>
-          <li>Deneme süresi boyunca tek seferde en fazla ~1 aylık bir program üretilebilir.</li>
-          <li>Deneme süresi sonunda hizmete devam etmek için ücretli bir plana geçilmesi gerekir.</li>
-          <li>Fiyatlandırma, okulun aktif öğretmen sayısına göre otomatik belirlenir (bkz. Fiyatlandırma sayfası).</li>
+          <li>Yeni kayıtlar ücretsiz olarak okulunu kurabilir ve tam dönem için program üretebilir.</li>
+          <li>Ücretsiz planda üretilen programın yalnızca ilk ayı görüntülenebilir; tüm dönemi görüntüleme,
+            dışa aktarma (Word/PDF/Excel), yazdırma, paylaşma ve geçmiş kayıtlar Standart plana özeldir.</li>
+          <li>Her e-posta adresi ve telefon numarası yalnızca BİR KEZ ücretsiz hesap açabilir; aynı kişinin
+            birden fazla e-posta ile tekrar ücretsiz hesap oluşturması engellenir.</li>
+          <li>Ücretsiz planda okul TOPLAM 1 kez tam program üretebilir; sınırsız yeniden oluşturma Standart plana özeldir.</li>
+          <li>Standart plan fiyatı sabittir, öğretmen sayısından bağımsızdır (bkz. Fiyatlandırma sayfası).</li>
         </ul>
       </div>
 

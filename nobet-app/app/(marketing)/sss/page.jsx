@@ -7,11 +7,11 @@ const FAQS = [
   },
   {
     q: 'Ücretsiz deneme var mı?',
-    a: '14 gün ücretsiz deneyebilirsin. Deneme süresince, kötüye kullanımı önlemek için tek seferde en fazla ~1 aylık bir program oluşturabilirsin; her e-posta ve telefon numarasıyla yalnızca bir kez deneme hesabı açılabilir.',
+    a: 'Süre sınırı yok — ücretsiz kaydolup okulunu kurabilir, tüm dönem için programı üretebilirsin. Ücretsiz planda üretilen programın yalnızca ilk ayı görüntülenebilir ve okul TOPLAM 1 kez tam program üretebilir; her e-posta ve telefon numarasıyla yalnızca bir kez ücretsiz hesap açılabilir.',
   },
   {
-    q: 'Fiyat, öğretmen sayısına göre nasıl belirleniyor?',
-    a: 'Okulundaki AKTİF öğretmen sayısı arttıkça/azaldıkça fiyat kademesi otomatik güncellenir — ayrıca bir işlem yapmana gerek yok. Güncel kademeleri Fiyatlandırma sayfasında görebilirsin.',
+    q: 'Fiyat nasıl belirleniyor?',
+    a: 'Standart plan sabit bir yıllık fiyattır, öğretmen sayısından bağımsızdır. Güncel fiyatı Fiyatlandırma sayfasında görebilirsin.',
   },
   {
     q: 'Hangi ödeme yöntemlerini kabul ediyorsunuz?',

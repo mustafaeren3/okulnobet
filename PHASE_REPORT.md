@@ -1,5 +1,282 @@
 # PHASE_REPORT.md
 
+## Faz 11 — Süper Admin Paneli v2 (profesyonel, MFA zorunlu, denetim izli SaaS yönetim paneli)
+
+### Canlıya uygulama sonrası doğrulama (migration'lar `supabase db push` ile uygulandıktan sonra)
+
+`supabase db query --linked` ile canlı şema, RLS, grant ve fonksiyon tanımları
+doğrudan sorgulandı (varsayımla değil, gerçek veriyle):
+
+- **27/27 migration** `remote` sütununda göründü (`supabase migration list`).
+- **30/30 public tablo** `rowsecurity=true` — `schools`/`school_users`/`settings`
+  dahil (daha önce migration dosyalarında olmadığı için statik doğrulanamayan O1
+  bulgusu artık ÇÖZÜLDÜ).
+- **30/30 admin/güvenlik fonksiyonu** `prosecdef=true` VE PUBLIC execute izni yok
+  (aclexplode ile doğrulandı) — Y2 bulgusu tam kapsamlı düzeltildi. Tek istisna
+  `current_school_id()` (repo dışı, aşağıda).
+- **0/30+ SECURITY DEFINER fonksiyonu** mutable search_path'e sahip değil.
+- `admin_audit_logs`/`platform_admins`/`payments`/`system_events`/
+  `rate_limit_events`/`school_admin_notes`: `authenticated`'e SIFIR CRUD izni
+  (bilgi_schema.role_table_grants ile doğrulandı), 0 RLS policy (deny-by-default).
+- `admin_audit_logs` üzerinde UPDATE/DELETE trigger'ları `tgenabled='O'` (aktif).
+- **716/716** var olan `subscriptions` satırı `plan_type='free', status='active'`
+  — veri göçü %100 temiz, hiç kalıntı `trial`/`trialing` yok.
+- **Supabase güvenlik danışmanı** (`supabase db advisors --type security`) 2 yeni
+  bulgu ekledi (aşağıda "Yeni bulgular"), geri kalanı ("SECURITY DEFINER fonksiyon
+  anon/authenticated çalıştırabiliyor", `enterprise_leads` açık INSERT) hepsi
+  BİLİNÇLİ tasarım — her biri incelendi, hepsinde kendi iç yetki kontrolü var.
+- **Testler**: `tests/unit` 106/106, `tests/db` 66/66 (4 test admin+aal2 hesabı
+  gerektirdiği için atlandı, bkz. `superAdminAuthorized.test.js`), yeni
+  `tests/e2e/admin-mfa.spec.js` 2/2. `npm run build` temiz.
+- **Sahip hesabı**: `platform_admins`'te 1 satır (`role='owner'`, aktif) —
+  henüz TOTP kaydı yok (`auth.mfa_factors` boş), `/super-admin/mfa`'da kurulum
+  bekliyor.
+
+**Yeni bulgular (canlıda tespit edildi, migration dosyalarında yoktu):**
+
+1. `subscriptions.plan_type`/`status` sütun DEFAULT'ları hâlâ eski değerlerde
+   (`'trial'`/`'trialing'`) — CHECK constraint yeni değerlere sıkılaştırıldığı
+   için bu default'lar artık GEÇERSİZ, kullanılırsa hata verir (veri bozulması
+   değil, ama tutarsız). `register_school()` her zaman değerleri açıkça
+   belirttiği için normal kayıt akışını ETKİLEMİYOR. **Düşük öncelik, kolay
+   düzeltme** (`alter column ... set default`).
+2. `platform_admins` tablosunda `anon` rolünün hâlâ `TRUNCATE`/`REFERENCES`/
+   `TRIGGER` izni var (2026-07 tarihli orijinal Faz 8.5 migration'ından kalma,
+   sadece `authenticated`'den revoke edilmiş). PostgREST bu üç izni HİÇ REST
+   endpoint'i olarak sunmadığı için pratikte istismar edilemez (aynı desen 26
+   tablonun TAMAMINDA var — Supabase projesinin kendi varsayılan ayrıcalık
+   kurulumu, bu oturumun bir hatası değil). **Bilgilendirme amaçlı, isteğe
+   bağlı temizlik.**
+3. `current_school_id()` — repo dışında oluşturulmuş, hâlâ PUBLIC execute +
+   mutable search_path. SECURITY DEFINER OLMADIĞI için (`security_definer:
+   false`) çağıran rolün kendi RLS'ine tabi — okuduğu `school_users` tablosu
+   zaten RLS korumalı, pratik risk düşük. **Kullanıcı onayı ile kolayca
+   düzeltilebilir** (`0028_search_path_and_grant_cleanup.sql` önerisi).
+
+Tek dosyalık MVP admin panelini (`SuperAdminPanel.jsx`, ~400 satır, tek yetki kontrolü
+"platform_admins'te satır var mı") üretim güvenliğine uygun, modüler bir panele
+dönüştürdü. Önce kapsamlı bir güvenlik denetimi yapıldı (bulgular aşağıda), sonra
+kullanıcı onayıyla 7 geri alınabilir alt fazda uygulandı (A→G). Migration'lar
+`0020`–`0027`.
+
+### Güvenlik denetimi — bulgular ve düzeltmeleri
+
+| # | Bulgu | Düzeltme |
+|---|---|---|
+| K1 (Kritik) | Admin paneli MFA'sız, tek faktörle (parola) tam çapraz-okul erişimi veriyordu | Supabase Auth TOTP MFA zorunlu — `platform_require_admin()` her admin RPC'sinde admin üyeliği VE `auth.jwt()->>'aal'='aal2'`'yi birlikte kontrol ediyor |
+| K2 (Kritik) | `nobet-app.zip` (repo kökü, 170MB, untracked) gerçek `.env.local` + `node_modules`/`.next` içeriyor | `.gitignore`'a `*.zip` eklendi; **dosyanın kendisi silinmedi, kullanıcı onayı bekleniyor** (bkz. bu mesajın sonu) |
+| Y1 (Yüksek) | Hiçbir admin mutasyonu audit log bırakmıyordu | `admin_audit_logs` (değiştirilemez/silinemez — trigger + hiç grant yok), her mutasyon RPC'si kendi gövdesinde yazıyor |
+| Y2 (Yüksek) | SECURITY DEFINER fonksiyonlarında PUBLIC execute hiç revoke edilmemişti | `0027`'de 29 fonksiyon için `revoke execute ... from public` |
+| Y3 (Yüksek) | Admin ekleme/çıkarma uygulama içinden yapılamıyordu, rol ayrımı yoktu | `platform_admins.role` (`admin`/`owner`), `platform_grant_admin`/`platform_revoke_admin` (owner-only), Ayarlar sayfası |
+| Y4 (Yüksek) | Kritik işlemler `window.confirm` ile korunuyordu | `ConfirmActionModal` — zorunlu neden, yıkıcı işlemlerde okul adını yeniden yazma |
+| Y5 (Yüksek) | Rate limiting hiç yoktu | Postgres tabanlı `check_rate_limit()` — login, MFA challenge, tüm admin RPC'leri |
+| O1 (Orta) | `schools`/`school_users`/`settings`/`current_school_id()` migration'larda yok (Dashboard'dan elle kurulmuş) | Statik olarak doğrulanamıyor — **kullanıcının canlıda elle kontrol etmesi gerekiyor** (sorgu aşağıda) |
+| O2 (Orta) | "Deneme Uzat" özelliği artık anlamsız (trial zaman bazlı bitmiyor) | Kasıtlı olarak dokunulmadı — ayrı bir ürün kararı (bkz. sonraki riskler) |
+| O3 (Orta) | Ham Postgres/PostgREST hataları kullanıcıya dönüyordu | `lib/errors.js sanitizeDbErrorMessage` + `lib/db/platformAdmin.js` merkezi `callRpc` — şema bilgisi sızdıran desenler generic mesaja çevrilir, ham hali `system_events`'e loglanır |
+| O4 (Orta) | Admin oturumunda inactivity timeout yoktu | `InactivityGuard` — 30 dk hareketsizlikte otomatik çıkış |
+| D1/D2 (Düşük) | `.gitignore` `.env`/`*.zip` kapsamıyordu; `platform_list_schools()` tüm okulları tek seferde dönüyordu | `.gitignore` genişletildi; `platform_list_schools_page()` (server-side arama/filtre/sıralama/sayfalama) |
+
+### Uygulanan alt fazlar
+
+- **Faz A** — Abonelik veri modeli göçü: `plan_type` (`trial`→`free`, +`enterprise`), `status`
+  (`trialing`→`active`, `canceled`→`cancelled`, +`past_due`) — TEK SEFERLİK temiz geçiş
+  (`0020`). `free_generation_quota`/`used` (sayısal kota, boolean bayrağın yerine).
+  **`isPremium` artık `status='active' AND plan_type IN ('standard','enterprise')`** —
+  bu düzeltme kritikti: göç sonrası ücretsiz okullar da `status='active'` aldığı için eski
+  `isPremium=status==='active'` kontrolü HERKESİ premium sayardı.
+- **Faz B** — `platform_admins.role`/`revoked_at`/`granted_by`; `platform_require_admin()`/
+  `platform_require_owner()`; `/super-admin/mfa` (kurulum/QR/doğrulama/challenge/kurtarma
+  yönlendirmesi); `app/super-admin/layout.jsx` (üyelik guard) + `(panel)/layout.jsx` (aal2
+  guard, route group ile `/mfa`'dan izole — yönlendirme döngüsü yok).
+- **Faz C** — `admin_audit_logs` (before/after jsonb, reason, request_id) + immutability
+  trigger; yazma SADECE diğer RPC'lerin içinden (client audit'i atlayamaz).
+- **Faz D** — Modüler klasör yapısı (`layout/schools/subscriptions/payments/.../actions/
+  components`); `platform_list_schools_page()` (whitelist'li sıralama, injection'a kapalı);
+  `platform_get_school_detail()` (tek çağrıda genel bilgi+kullanıcı+abonelik+program
+  geçmişi+notlar); `school_admin_notes`.
+- **Faz E** — `ConfirmActionModal` (window.confirm tamamen kaldırıldı); `platform_reopen_school`/
+  `platform_cancel_subscription`/`platform_adjust_free_quota`; `payments` tablosu (manuel ödeme
+  kaydı — "Toplam Tahsilat"ın GERÇEK veri kaynağı).
+- **Faz F** — `check_rate_limit()`/`rate_limit_events`; `system_events` + `log_security_event()`;
+  Genel Bakış'a gerçek "Toplam Tahsilat" (payments toplamı), "Program Üretme Başarı Oranı"
+  (`schedule_generations`'tan), "Son Kritik Sistem Olayları" eklendi — ARR/MRR açıkça
+  **projeksiyon** etiketli, tahsilattan ayrı gösteriliyor.
+- **Faz G** — `0027`: 29 fonksiyonda PUBLIC execute revoke; merkezi hata sıkılaştırma;
+  `InactivityGuard`; `.gitignore`; testler (aşağıda); bu rapor.
+
+### Bilinçli kısayollar / kod kalitesi kararları
+
+- **Rate limit `admin:${user.id}` anahtarıyla TÜM admin RPC'lerinde** (sadece mutasyonlarda
+  değil) — plan sadece mutasyonları önermişti, ama tek giriş noktasında (`requirePlatformAdmin`)
+  uygulamak çok daha basit ve kaçırma riski yok; okuma-ağırlıklı normal kullanımı etkilemeyecek
+  kadar yüksek bir eşik (60/60sn) seçildi.
+- **`rate_limit_events` kendiliğinden temizlenmiyor** (pg_cron kurulu değil) — zamanla büyür,
+  periyodik temizlik ayrı bir altyapı kararı gerektiriyor, bu turun kapsamı dışında.
+- **Rate-limit/AAL kontrolleri "fail-open"** — RPC/migration henüz yoksa (örn. bu PR'dan hemen
+  sonra, migration uygulanmadan önceki geçiş anı) erişimi REDDETMEK yerine İZİN VERİR. Bilinçli
+  tercih: bir güvenlik SIKILAŞTIRMASININ kendisi panelin tamamını kilitlememeli. AAL kontrolünün
+  kendisi (`requirePlatformAdmin`) bu kuralın dışında — o her zaman fail-closed.
+  Şablon: `checkRateLimit(...).catch(() => true)`.
+- **`current_school_id()` ve `schools`/`school_users`/`settings`'in PUBLIC izni/RLS'i bu PR'da
+  DOKUNULMADI** — migration dosyalarında tanımlı değiller (O1), yanlış bir revoke TÜM
+  uygulamanın RLS'ini bozabilirdi. Kullanıcının canlıda doğrulaması gerekiyor (aşağıda).
+- **"Deneme Uzat" özelliği kaldırılmadı** — hâlâ çalışıyor ama artık büyük ölçüde anlamsız
+  (O2), ayrı bir admin-panel temizlik kararı.
+
+### Test kapsamı
+
+- `tests/unit/errors.test.js` (yeni) — `sanitizeDbErrorMessage`, tam kapsam.
+- `tests/db/rateLimit.test.js` (yeni) — `check_rate_limit`, admin/giriş gerektirmez, migration
+  uygulanınca tam çalışır.
+- `tests/db/superAdminAccess.test.js` (yeni, 6 test) — platform_admins üyesi OLMAYAN bir
+  kullanıcının hiçbir admin RPC'sinden/tablosundan (audit log, payments, platform_admins'in
+  kendisi) veri/işlem alamadığını kanıtlar — **admin hesabı gerektirmez**, migration
+  uygulanınca tam kapsamla çalışır.
+- `tests/db/superAdminAuthorized.test.js` (yeni, 4 test) — **GERÇEK bir admin+aal2 hesabı
+  gerektirir** (aal1'in reddedildiği, aal2'nin audit log oluşturduğu, sıralama whitelist'inin
+  SQL injection'ı reddettiği senaryolar). `TEST_ADMIN_EMAIL`/`TEST_ADMIN_PASSWORD`/
+  `TEST_ADMIN_TOTP_SECRET` env değişkenleri set edilmemişse **atlanır** (kırmızı değil) —
+  Node'un yerleşik `crypto`'suyla (yeni bağımlılık yok) TOTP kodu üretilerek tarayıcısız MFA
+  challenge tamamlanıyor. Kurulum adımları dosyanın başında.
+- `tests/e2e/admin-mfa.spec.js` (yeni, Playwright) — `/super-admin` ve `/super-admin/mfa`'ya
+  girişsiz erişimin `/login`'e yönlendiği.
+- `vitest run tests/unit`: **106/106 yeşil.** `npm run build`: temiz, 12 yeni admin route'u dahil.
+- `tests/db/*` bu turda da canlıda TAM çalıştırılamadı — migration'lar (`0020`–`0027`)
+  uygulanana kadar bekliyor (önceki her fazdaki aynı durum).
+
+### Kullanıcının yapması gerekenler
+
+1. **`0020`'den `0027`'ye kadar migration'ları SIRAYLA** Supabase SQL Editor'de çalıştır.
+2. **`nobet-app.zip` dosyasını silmemi ister misin?** (K2 bulgusu — gerçek `.env.local` +
+   `node_modules` içeriyor, 170MB, Git'e girmemiş ama diskte duruyor.) Onaylarsan silerim,
+   onaylamazsan dokunmam.
+3. **`current_school_id()`'nin PUBLIC execute iznini elle kontrol et** (O1 — bu fonksiyon
+   migration dosyalarında yok):
+   ```sql
+   select p.proname, p.proacl from pg_proc p
+   join pg_namespace n on n.oid = p.pronamespace
+   where n.nspname = 'public' and p.proname = 'current_school_id';
+   ```
+   Gerekirse `revoke execute on function public.current_school_id() from public;` (authenticated
+   grant'i etkilemez).
+4. **Kendini süper admin owner yap** (migration sonrası, SQL Editor'de):
+   ```sql
+   insert into platform_admins (user_id, role)
+   select id, 'owner' from auth.users where email = 'SENİN_EMAIL_ADRESİN';
+   ```
+5. `/super-admin`'e giriş yap → `/super-admin/mfa`'ya yönleneceksin → QR kodu tara, kodu doğrula.
+6. Testleri doğrula: `npx vitest run tests/db`, `npx playwright test tests/e2e/admin-mfa.spec.js`.
+   `tests/db/superAdminAuthorized.test.js`'i tam çalıştırmak istersen adım 5'teki QR'ın Base32
+   secret'ını `TEST_ADMIN_TOTP_SECRET` olarak `.env.local`'e ekle.
+
+### Sonraki faz riskleri
+
+1. **Migration'lar uygulanana kadar hiçbir yeni davranış canlıda doğrulanamaz** — en büyük
+   risk, azaltma: yukarıdaki adım 1.
+2. **İlk owner'ı kim atayacak sorusu hâlâ elle SQL'e dayanıyor** (adım 4) — bilinçli (Faz
+   8.5'ten beri aynı desen), ama okul sayısı/admin sayısı büyüdükçe bu adımın belgeye
+   (README/runbook) taşınması iyi olur.
+3. **"Deneme Uzat" ve `trial_ends_at` artık büyük ölçüde kullanılmıyor ama şemada/UI'da
+   duruyor** — bir sonraki admin-panel temizlik fazında kaldırılması değerlendirilmeli.
+
+---
+
+## Faz 10 — Ticarileşme & Analytics (sabit fiyat, kurumsal, ödeme iskeleti, admin analytics)
+
+Faz 9'un devamı: SaaS dönüşümünün ticari/admin tarafı — sabit fiyatlandırma, Kurumsal lead formu, kolayca gerçek bir ödeme sağlayıcısına bağlanabilecek bir iskelet ve platform sahibinin görebileceği genişletilmiş analytics.
+
+### Tamamlanan
+
+1. **`lib/engine/pricing.js`** — öğretmen-sayısı-kademeli `PRICING_TIERS`/`getPricingTier` **kaldırıldı**, yerine sabit `STANDARD_YEARLY_PRICE = 1490`. Etkilenen tüm yerler güncellendi: `app/(marketing)/fiyatlandirma/page.jsx` (3 kart: Ücretsiz/Standart/Kurumsal), `app/page.jsx` (ana sayfa fiyat bölümü + "14 Gün Ücretsiz Dene" → "Ücretsiz Kayıt Ol"), `Dashboard.jsx` Hesabım kartı (kademe hesaplama yerine sabit fiyat + premium/ücretsiz durumuna göre CTA), `lib/engine/platformMetrics.js` (ciro artık `premiumSchoolCount × 1490`).
+2. **Eski "14 gün deneme" metinleri temizlendi** — `signup/page.jsx`, `kullanim-sartlari/page.jsx`, `sss/page.jsx` artık yeni modeli (ücretsiz kayıt + ilk ay + 1 kez üretim) anlatıyor.
+3. **`0018_leads.sql`** (yeni migration) — `enterprise_leads` (Kurumsal formu, anon insert açık) + `platform_list_enterprise_leads()`/`platform_list_purchase_intents()` (süper admin okuma RPC'leri, 0016 deseninin devamı).
+4. **`app/(marketing)/kurumsal/`** (yeni) — form sayfası + `submitEnterpriseLead` server action (`lib/db/enterpriseLeads.js`).
+5. **`lib/payments/provider.js` + `lib/payments/mock.js`** (yeni) — tek fonksiyon sözleşmesi (`createCheckoutSession`), sınıf/DI container yok. Şu an tek implementasyon her zaman `null` döner; `app/(wizard)/account/actions.js requestPremiumUpgrade` bunu önce dener, `null` dönerse `purchase_intents`'e talep kaydı yazar. Gerçek bir sağlayıcı (`lib/payments/iyzico.js` vb.) eklenince sadece `provider.js`'deki tek satır değişecek.
+6. **`0019_analytics.sql`** (yeni migration) — `platform_list_schools()` genişletildi: `generation_count`, `avg_duration_ms`, `manual_change_count`, `total_duty_count`, `last_login_at` (hepsi Faz 9'daki `schedule_generations` tablosundan + `duty_assignments`/`auth.users`'tan canlı türetiliyor, ayrı bir sayaç saklanmıyor).
+7. **`SuperAdminPanel.jsx`** genişletildi: özet kartlarına Toplam/Trial/Premium okul sayısı, Dönüşüm Oranı, Yıllık Ciro, Oluşturulan Program, Ort. Oluşturma Süresi eklendi; yeni "En Aktif Okullar" listesi; yeni "Kurumsal Talepler"/"Yükseltme Talepleri" kartları (lazy-fetch, ayrı RPC); her okul satırına yeni "📊 Analytics" genişletme paneli (oluşturulan program, toplam nöbet, manuel değişiklik, ort. süre, tahmini kazanılan zaman — `lib/engine/fairness.js estimateMinutesSaved` ile aynı fonksiyon, SQL'de tekrarlanmadı — son giriş tarihi).
+
+### Bilinçli kısayollar / kod kalitesi kararları
+
+- **"Tahmini kazanılan zaman" SQL'de hesaplanmıyor.** `platform_list_schools()` sadece ham `total_duty_count` döner, dakika/saat çevrimi `lib/engine/fairness.js`'teki (Faz 9) `estimateMinutesSaved` ile JS tarafında yapılır — "atama başına 3 dakika" sabiti tek yerde yaşasın diye.
+- **`lib/payments/` bilinçli olarak tek dosyalık, DI container/interface yok** — CLAUDE.md'nin "DI container yasak" kuralına uygun, düz fonksiyon + tek switch (`getPaymentProvider`). İkinci gerçek sağlayıcı eklenince genişletilecek.
+- **Süper adminin "Deneme Uzat" özelliği bilinçli olarak dokunulmadan bırakıldı** (Faz 9'da not edilmişti) — artık trial zaman bazlı bitmediği için işlevi büyük ölçüde anlamsız, ama kaldırmak ayrı bir ürün kararı gerektiriyor, bu fazın kapsamı dışında tutuldu.
+
+### Test kapsamı
+
+- `tests/unit/pricing.test.js`, `tests/unit/platformMetrics.test.js` yeniden yazıldı (sabit fiyat + trial/premium/dönüşüm oranı testleri). **`vitest run tests/unit`: 102/102 yeşil.**
+- `npm run build`: temiz, yeni route'lar (`/kurumsal`) dahil tüm sayfalar üretildi.
+- Tarayıcıda (dev server, `npm run dev`) doğrulandı: `/fiyatlandirma` 3 kartı doğru gösteriyor, `/kurumsal` formu dolduruldu ve gönderildi — migration 0018 henüz canlıya uygulanmadığı için beklenen "tablo bulunamadı" hatası **çökmeden, kullanıcıya düzgün bir mesajla** gösterildi (server action try/catch'i doğru çalışıyor). `/dashboard`'a girişsiz erişim `/login`'e yönlendirdi (middleware bozulmadı). Konsol/sunucu loglarında hata yok.
+- **`tests/db/*` ve gerçek "program oluştur → başarı ekranı → ay kilidi → premium ekranı" akışı bu turda da canlıda doğrulanamadı** — migration 0017/0018/0019 uygulanmadan ne DB testleri ne de dashboard'un gerçek verisi çalışır. Faz 9'daki aynı bekleyen adım.
+
+### Kullanıcının yapması gerekenler
+
+1. **`0017`, `0018`, `0019` migration'larını sırayla** Supabase SQL Editor'de çalıştır.
+2. Migration sonrası `npx vitest run tests/db` ile doğrula.
+3. Gerçek bir hesapla uçtan uca dene: kayıt → program oluştur → başarı ekranı → ay kilitleri → süper admin panelinde "Abonelik Düzenle" ile bir okulu `active` yap → tüm kilitlerin açıldığını doğrula.
+4. Gerçek ödeme sağlayıcısı bağlanmak istenirse `lib/payments/` yeni bir dosyada (örn. `iyzico.js`) implement edilip `provider.js`'de tek satır değiştirilecek — ayrı, büyük bir ürün/entegrasyon kararı.
+
+### Sonraki faz riskleri
+
+1. **Migration'lar canlıya uygulanana kadar hem DB testleri hem gerçek kullanıcı akışı doğrulanamaz** — en büyük risk, azaltma: yukarıdaki adım 1.
+2. **Gerçek ödeme yok** — tüm "Premium" geçişleri şu an manuel (süper admin panelinden) yapılıyor; hacim arttıkça bu ölçeklenmez, gerçek sağlayıcı entegrasyonu ayrı, öncelikli bir sonraki faz olmalı.
+3. **Süper admin "Deneme Uzat" özelliği artık kafa karıştırıcı** (yukarıda not edildi) — bir sonraki admin-panel fazında kaldırılması veya "Ücretsiz plana geçir" gibi anlamlı bir aksiyona dönüştürülmesi değerlendirilmeli.
+
+---
+
+## Faz 9 — Feature Gating çekirdeği (zaman bazlı deneme → özellik bazlı kısıt)
+
+Kullanıcı isteği: 30 günlük zaman bazlı deneme kaldırılsın, yerine "Feature Gating" gelsin — ücretsiz okul tam dönem programı üretebilsin (algoritma tüm dönemi çalıştırır), ama yalnızca İLK AYI görüntüleyebilsin; export/paylaşım/geçmiş/sınırsız-yeniden-oluşturma Premium'a kilitli olsun. Program oluşturduktan sonra gerçek verilerden hesaplanan bir "başarı ekranı", kilitli bir şey açılmak istendiğinde profesyonel bir "Premium ekranı" gösterilsin.
+
+### Mimari karar — merkezi yetkilendirme katmanı
+
+Yeni `lib/engine/access.js` (saf) tüm gating kararlarının TEK kaynağı: `isPremium`, `canAccessFeature(subscription, FEATURES.*)`, `buildMonthList`, `getUnlockedMonthKey`, `isMonthUnlocked`. Ne `app/` ne `lib/db/` bu kararı kendi if/else'iyle tekrarlamıyor — CLAUDE.md'nin istediği "dağınık if/else yasak" kuralının karşılığı.
+
+**Kritik tasarım kararı — "1 kez ücretsiz üretim" kısıtı motorun (`lib/db/bulkSchedule.js generateBulkSchedule`) İÇİNE değil, onu çağıran action katmanına (`lib/db/subscriptions.js requireCanGenerateSchedule`, `app/(wizard)/schedule/actions.js`) kondu.** İlk planda "en derin nokta"ya (motora) konması düşünülmüştü ama `tests/db/bulkSchedule.test.js`'in rotasyon sürekliliğini kanıtlamak için AYNI okulda `generateBulkSchedule`'ı defalarca çağıran (idempotency, ay değişimi, hafta kayması, gap-recovery testleri) çok sayıda testi kırdığı görüldü — motor, aralığı sonradan uzatmak gibi meşru çoklu-çağrı senaryoları için tasarlanmış. Kısıt UI'ın gerçek giriş noktasına (action) taşınarak hem ürün kuralı (bir "Program Oluştur" tıklaması = 1 hak) korundu hem de mevcut, çalışan test paketi yeniden yazılmadı.
+
+**Ay kilidinin referansı "üretilen aralığın ilk ayı" değil, okulun EN ERKEN atama tarihi** (`lib/db/dutyAssignments.js getEarliestAssignmentDate`). Böylece okul aynı dönemi birden çok kez (parça parça) üretse bile açık ay hep sabit kalır — her yeni "Program Oluştur" çağrısı açık ayı kaydırmaz.
+
+**Kilitli ay/aralık verisi sunucudan HİÇ gönderilmiyor** (`{ locked: true }`, satır verisi yok) — sadece UI'da buton kilitlemek yetmezdi, devtools'tan okunabilirdi. `runBulkSchedule` bile artık ücretsiz planda sadece açık ayın satırlarını döndürüyor.
+
+### Tamamlanan
+
+1. **`0017_feature_gating.sql`** (yeni migration): `subscriptions.trial_schedule_generated_at` + `mark_trial_schedule_generated()`; `schedule_generations` (analytics olay kaydı, Faz 10'un temeli) + `log_schedule_generation()`; `schedule_shares` + `create_schedule_share()`/`get_public_schedule()` (paylaşım — Premium'e özel, kontrolü hem action'da hem SQL fonksiyonunda tekrarlanır); `purchase_intents` + RLS (planlanan Faz 10 kapsamından öne alındı, PremiumScreen'in CTA'sı gerçek bir kayıt oluşturabilsin diye).
+2. **`lib/engine/access.js`** (yeni, saf) — merkezi yetkilendirme (yukarıda).
+3. **`lib/engine/subscription.js`** — `checkTrialDateRangeAllowed`/`MAX_TRIAL_RANGE_DAYS` kaldırıldı (artık kullanılmıyor); `'trialing'` artık `trial_ends_at`'a bakmadan her zaman `isUsable:true, label:'Ücretsiz'` dönüyor.
+4. **`lib/engine/fairness.js`** (yeni, saf) — `computeFairnessScore` (stddev/mean bazlı 0-100 adalet puanı), `estimateMinutesSaved` (başarı ekranı için kaba tahmin).
+5. **`lib/db/subscriptions.js`** — `requireUsableSubscription` sadeleşti (temel kullanılabilirlik), yeni `requireCanGenerateSchedule` (1-kez kısıtı, action katmanı için), `markTrialScheduleGenerated`, `logScheduleGeneration`.
+6. **`lib/db/bulkSchedule.js`** — üretim süresi + `stats` (toplam nöbet/öğretmen/alan/çakışma sayısı, adalet puanı, süre, tahmini tasarruf) + `months` (ay listesi) döndürüyor; başarılı üretimde `schedule_generations`'a log atıyor.
+7. **`app/(wizard)/schedule/actions.js`** — `runBulkSchedule`/`previewBulkSchedule` 1-kez kısıtını uyguluyor; yeni `fetchScheduleMonth` (ay bazlı, kilitliyse veri yok); `fetchScheduleView` artık Premium'e kilitli (= "geçmiş programlar" özelliği); yeni `createShareLink`/`removeShareLink`.
+8. **`app/(wizard)/dashboard/Dashboard.jsx`** — Program sekmesi ay-sekmeli hale geldi (kilitli aylar 🔒, tıklanınca sunucuya gitmeden Premium ekranı açılır); export bölümüne PDF/Excel/Yazdır/Paylaş eklendi, hepsi (CSV/Word dahil) Premium'e kilitli; gerçek `window.print()` + `@media print` CSS; program üretimi bitince toast yerine gerçek verilerle **başarı ekranı** (`SuccessScreen`, dosya içi, tek kullanım yeri).
+9. **`app/(wizard)/dashboard/PremiumScreen.jsx`** (yeni) — istekte verilen başlık/madde listesi/fiyat aynen; CTA `purchase_intents`'e yazan `requestPremiumUpgrade` (`app/(wizard)/account/actions.js`, yeni) ile talep kaydı oluşturuyor.
+10. **`app/share/[token]/page.jsx`** (yeni) — girişsiz herkese açık paylaşım sayfası, `get_public_schedule` RPC'si üzerinden (RLS bypass yok).
+
+### Bilinçli kısayollar / kod kalitesi kararları
+
+- **Excel dışa aktarma gerçek `.xlsx` değil.** `xlsx` (SheetJS) paketi npm'de düzeltmesi olmayan kritik önem dereceli bir prototype-pollution/ReDoS açığı taşıyor; alternatif `exceljs` da `archiver` zinciri üzerinden birden fazla yüksek önem dereceli açık getiriyordu (`npm audit`). İkisi de reddedildi — bunun yerine `exportHTML` (Word) ile AYNI kanıtlanmış teknik kullanıldı: HTML tablosu, `.xls` uzantısı + `application/vnd.ms-excel` MIME — Excel bunu native açıyor, yeni bağımlılık/güvenlik yüzeyi yok. PDF için `jspdf`+`jspdf-autotable` (v4/v5 — `npm audit` temiz) kullanıldı.
+- **`purchase_intents` şeması Faz 10'dan bu faza öne alındı** — PremiumScreen'in CTA'sı gerçek bir kayıt yazsın diye (kullanıcı onayı: "talep kaydı + manuel aktivasyon").
+- **Export'ların üçü de (CSV/PDF/Excel) aynı hücre-metni mantığını paylaşıyor** — `Dashboard.jsx` içinde yeni bir modül açmak yerine dosya-içi `buildExportGrid` yardımcı fonksiyonuna toplandı (tek dosyanın tek tüketicisi, ayrı bir `lib/export/` katmanı YAGNI'ye aykırı olurdu).
+- **Süper adminin "Deneme Uzat" özelliği artık büyük ölçüde anlamsız** (trial zaman bazlı bitmiyor) ama kaldırılmadı — kapsam dışı, Faz 10'da admin panel genişlerken gözden geçirilecek.
+
+### Test kapsamı
+
+- `tests/unit/access.test.js`, `tests/unit/fairness.test.js` (yeni). `tests/unit/subscription.test.js` güncellendi (`checkTrialDateRangeAllowed` testleri kaldırıldı). `tests/unit/platformMetrics.test.js`'teki 1 test Faz 9 semantiğine güncellendi. **`vitest run tests/unit`: 105/105 yeşil.**
+- `tests/db/subscriptions.test.js`, `tests/db/subscriptionGuard.test.js` güncellendi (yeni `requireCanGenerateSchedule` 1-kez senaryosu dahil) — ama **migration 0017 canlı Supabase projesine henüz uygulanmadığı için bu dosyalar ve tüm `tests/db/*` bu turda ÇALIŞTIRILAMADI** (Faz 8.5'teki aynı durum: canlı doğrulama migration uygulanana kadar bekliyor).
+- `npm run build`: temiz derleme, `/share/[token]` route dahil tüm sayfalar üretildi.
+
+### Kullanıcının yapması gerekenler
+
+1. **`0017_feature_gating.sql`** migration'ını Supabase SQL Editor'de çalıştır (0016'dan sonra sırayla).
+2. Migration sonrası `npx vitest run tests/db` ile DB testlerini doğrula.
+3. Tarayıcıda uçtan uca dene: yeni bir okulla program oluştur → başarı ekranı → Program sekmesinde ay kilitleri → kilitli aya/export'a tıklayınca Premium ekranı → 2. "Program Oluştur" reddi.
+
+### Sonraki faz riskleri
+
+1. **Migration canlıya uygulanana kadar hiçbir yeni DB davranışı gerçek ortamda doğrulanamaz** — azaltma: yukarıdaki adım 1-2.
+2. **`purchase_intents`/`schedule_shares` süper admin tarafında henüz görünmüyor** (RPC'ler Faz 10'da eklenecek) — talepler şimdilik sadece tabloda birikiyor, SQL Editor'den elle okunabilir.
+3. **Excel çıktısı gerçek `.xlsx` değil, Word gibi HTML-tabanlı `.xls`** — büyük/karmaşık çizelgelerde bazı Excel sürümleri açılışta uyarı gösterebilir (zararsız, "Evet"le geçilir); gerçek OOXML gerekiyorsa güvenli bir kütüphane bulununca ayrı bir fazda değiştirilebilir.
+
+---
+
 ## Faz 8.5 — Süper Admin Paneli (platform sahibinin çapraz-okul yönetim ekranı)
 
 Kullanıcı isteği: özet metrikler (aktif okul sayısı, aylık tahmini ciro, bu hafta kaydolan okul), okul yönetim tablosu (deneme uzatma, manuel abonelik tanımlama, hesap dondurma) ve canlı kullanım (hangi okul ne zaman program üretti).

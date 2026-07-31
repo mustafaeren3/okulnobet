@@ -139,6 +139,22 @@ export async function getLatestAssignmentDateBefore(supabase, schoolId, dateStr)
   return data[0]?.duty_date ?? null;
 }
 
+// Bir okulun EN ERKEN atama gününü döndürür (yoksa null). Feature
+// gating'in "açık ay" tanımı bu tarihin ayı — okulun hiç generate
+// ettiği ilk aralığın ilk ayı, hangi tarihte/kaç kez tekrar üretim
+// yapılırsa yapılsın SABİT kalır (bkz. lib/engine/access.js
+// getUnlockedMonthKey, app/(wizard)/schedule/actions.js).
+export async function getEarliestAssignmentDate(supabase, schoolId) {
+  const { data, error } = await supabase
+    .from('duty_assignments')
+    .select('duty_date')
+    .eq('school_id', schoolId)
+    .order('duty_date', { ascending: true })
+    .limit(1);
+  if (error) throw new Error(error.message);
+  return data[0]?.duty_date ?? null;
+}
+
 // Bir okulun TÜM zamanlardaki atamalarını (tarih filtresi yok) tek
 // sorguda çekip teacherId → toplam atama sayısı eşleşen bir obje
 // döndürür. selectFairest'in "o ana kadar en az nöbet tutan" adillik
