@@ -1,7 +1,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { Settings } from 'lucide-react';
 import { fetchAdmins, grantAdmin, revokeAdmin } from '../../actions/admins';
+import Badge from '../../../components/Badge';
 import '../../../(wizard)/dashboard/dashboard.css';
 
 function formatDateTime(dateStr) {
@@ -52,7 +54,7 @@ export default function SettingsPage() {
   return (
     <div className="dash-root" style={{ minHeight: 'auto' }}>
       <div className="card">
-        <h3>⚙️ Admin Yönetimi</h3>
+        <h3><Settings size={17} /> Admin Yönetimi</h3>
         <div className="info-box">
           Yeni admin eklemek/çıkarmak sadece "owner" rolündeki bir admin tarafından yapılabilir
           (bkz. platform_require_owner) — bu, admin yetkisinin kimin tarafından genişletilebileceğini
@@ -81,7 +83,7 @@ export default function SettingsPage() {
                   <td>{a.email}</td>
                   <td>{a.role}</td>
                   <td>{formatDateTime(a.created_at)}</td>
-                  <td>{a.revoked_at ? 'Kaldırıldı' : 'Aktif'}</td>
+                  <td><Badge variant={a.revoked_at ? 'neutral' : 'success'}>{a.revoked_at ? 'Kaldırıldı' : 'Aktif'}</Badge></td>
                   <td>
                     {!a.revoked_at && (
                       <button className="btn btn-danger" style={{ width: 'auto', padding: '4px 10px', fontSize: 11 }} disabled={busy} onClick={() => handleRevoke(a.user_id, a.email)}>

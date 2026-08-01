@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { startEnrollment, cancelEnrollment, verifyEnrollment, startChallenge, verifyChallenge } from './actions';
+import Logo from '../../components/Logo';
 import '../../(auth)/auth.css';
 
 // mode='enroll': hiç doğrulanmış TOTP faktörü yok, kurulum (QR + kod)
@@ -82,7 +83,10 @@ export default function MfaScreen({ mode, factorId: initialFactorId }) {
   return (
     <div className="auth-root">
       <div className="auth-card" style={{ maxWidth: 460 }}>
-        <Link href="/" className="auth-logo">NÖBET SİSTEMİ</Link>
+        <Link href="/" className="auth-logo">
+          <Logo size={34} />
+          <span>OkulNöbet</span>
+        </Link>
         <div className="auth-subtitle">Süper Admin — İki Aşamalı Doğrulama</div>
         <h1>{phase === 'challenge' ? 'Kimliğini Doğrula' : 'MFA Kurulumu'}</h1>
 

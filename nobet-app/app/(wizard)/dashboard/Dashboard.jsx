@@ -1,7 +1,13 @@
 'use client';
 
-import { Fragment, useMemo, useRef, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
+import { AnimatePresence } from 'framer-motion';
 import { useRouter } from 'next/navigation';
+import {
+  Settings, Calendar, BarChart3, User, Users, MapPin, Lightbulb, School,
+  CalendarDays, AlertTriangle, Flag, Scale, Puzzle, Crown, Check, Sparkles,
+  Eye, Lock, CheckCircle2, Download, FileText, Link2, Printer, Timer, PartyPopper, X,
+} from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { getWeekStart } from '@/lib/engine/rotation';
 import { getWeekday, DAY_TR } from '@/lib/engine/weekday';
@@ -38,6 +44,12 @@ import {
 } from '../schedule/actions';
 import { toggleRule } from '../rules/actions';
 import PremiumScreen from './PremiumScreen';
+import Logo from '../../components/Logo';
+import EmptyState from '../../components/EmptyState';
+import Badge from '../../components/Badge';
+import Toast from '../../components/Toast';
+import Modal from '../../components/Modal';
+import { useToast } from '../../components/useToast';
 import './dashboard.css';
 
 // Faz 7.3: kullanıcı ilk tasarıma (tek sayfa, 3 sekme: Ayarlar/Program/
@@ -255,8 +267,8 @@ function ScheduleCell({ date, zoneId, entries, teacherOptions, onRefresh }) {
         return (
           <div key={e.id} className="cell-person" style={{ background: `#${color}`, color: luminance(color) > 140 ? '#000' : '#fff' }}>
             {e.name}
-            {e.isManual && <span title="Elle düzenlendi (kilitli)"> 🔒</span>}
-            <button disabled={busy} onClick={() => handleRemove(e.id)}>×</button>
+            {e.isManual && <span title="Elle düzenlendi (kilitli)"><Lock size={11} /></span>}
+            <button disabled={busy} onClick={() => handleRemove(e.id)} aria-label="Kaldır"><X size={12} /></button>
           </div>
         );
       })}
@@ -268,8 +280,8 @@ function ScheduleCell({ date, zoneId, entries, teacherOptions, onRefresh }) {
               <option key={t.id} value={t.id}>{t.full_name}</option>
             ))}
           </select>
-          <button disabled={busy || !selectedTeacherId} onClick={handleAdd}>✓</button>
-          <button disabled={busy} onClick={() => setAdding(false)}>×</button>
+          <button disabled={busy || !selectedTeacherId} onClick={handleAdd} aria-label="Ekle"><Check size={12} /></button>
+          <button disabled={busy} onClick={() => setAdding(false)} aria-label="Vazgeç"><X size={12} /></button>
         </div>
       ) : (
         <button className="cell-add-btn" onClick={() => setAdding(true)}>+</button>
@@ -291,16 +303,8 @@ export default function Dashboard({
 }) {
   const supabase = useMemo(() => createClient(), []);
   const router = useRouter();
-  const toastTimer = useRef(null);
-
   const [activeTab, setActiveTab] = useState('ayarlar');
-  const [toast, setToast] = useState({ msg: '', isErr: false, visible: false });
-
-  function showToast(msg, isErr = false) {
-    setToast({ msg, isErr, visible: true });
-    clearTimeout(toastTimer.current);
-    toastTimer.current = setTimeout(() => setToast((t) => ({ ...t, visible: false })), 3000);
-  }
+  const { toast, showToast } = useToast();
 
   async function handleLogout() {
     await supabase.auth.signOut();
@@ -963,16 +967,16 @@ export default function Dashboard({
   return (
     <div className="dash-root">
       <header>
-        <div className="logo">NÖBET SİSTEMİ</div>
-        <div className="badge">OTOMATİK</div>
+        <div className="logo"><Logo size={26} /><span>OkulNöbet</span></div>
+        <Badge variant="primary">OTOMATİK</Badge>
         <div className="school-name">{schoolName}</div>
         <button className="logout-btn" onClick={handleLogout}>Çıkış Yap</button>
       </header>
 
       <div className="tabs">
-        <button className={`tab-btn ${activeTab === 'ayarlar' ? 'active' : ''}`} onClick={() => setActiveTab('ayarlar')}>⚙️ Ayarlar</button>
-        <button className={`tab-btn ${activeTab === 'program' ? 'active' : ''}`} onClick={() => setActiveTab('program')}>📅 Program</button>
-        <button className={`tab-btn ${activeTab === 'dagitim' ? 'active' : ''}`} onClick={() => setActiveTab('dagitim')}>📊 Dağılım</button>
+        <button className={`tab-btn ${activeTab === 'ayarlar' ? 'active' : ''}`} onClick={() => setActiveTab('ayarlar')}><Settings size={15} /> Ayarlar</button>
+        <button className={`tab-btn ${activeTab === 'program' ? 'active' : ''}`} onClick={() => setActiveTab('program')}><Calendar size={15} /> Program</button>
+        <button className={`tab-btn ${activeTab === 'dagitim' ? 'active' : ''}`} onClick={() => setActiveTab('dagitim')}><BarChart3 size={15} /> Dağılım</button>
       </div>
 
       {/* ═══════ TAB: AYARLAR ═══════ */}
@@ -980,7 +984,7 @@ export default function Dashboard({
         <div className="two-col">
           <div>
             <div className="card">
-              <h3>👤 Personel Yönetimi</h3>
+              <h3><User size={17} /> Personel Yönetimi</h3>
               <div className="info-box">Kişi ekle/sil → bir sonraki program üretiminde otomatik uygulanır.</div>
 
               <div className="form-row">
@@ -1040,8 +1044,8 @@ export default function Dashboard({
                       <span className="person-name">{t.full_name} <span style={{ color: 'var(--muted)', fontWeight: 400 }}>({t.branch})</span></span>
                       <span className="person-tag" style={{ background: 'var(--border)', color: 'var(--muted)' }}>{RESTRICTION_LABELS[t.restriction_mode]}</span>
                       {t.fixed_zone_id && (
-                        <span className="person-tag" style={{ background: 'var(--border)', color: 'var(--muted)' }}>
-                          📍 {zoneNameById[t.fixed_zone_id] || '—'}
+                        <span className="person-tag" style={{ background: 'var(--border)', color: 'var(--muted)', display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                          <MapPin size={10} /> {zoneNameById[t.fixed_zone_id] || '—'}
                         </span>
                       )}
                       <button
@@ -1058,7 +1062,7 @@ export default function Dashboard({
                       <button className="person-tag" style={{ background: 'none', border: '1px solid var(--border)', color: 'var(--muted)', cursor: 'pointer' }} onClick={() => toggleExpand(t, 'zone')}>
                         {expandedId === t.id && expandedPanel === 'zone' ? 'Kapat' : 'Yer Kısıtı'}
                       </button>
-                      <button className="person-del" onClick={() => handleRemoveTeacher(t)}>×</button>
+                      <button className="person-del" onClick={() => handleRemoveTeacher(t)} aria-label="Öğretmeni sil"><X size={14} /></button>
                     </div>
                     {expandedId === t.id && expandedPanel === 'day' && (
                       <div style={{ background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 8, padding: 12, marginTop: -2 }}>
@@ -1096,7 +1100,8 @@ export default function Dashboard({
                           ))}
                         </select>
                         <div className="info-box" style={{ marginBottom: 10, fontSize: 11 }}>
-                          💡 Bu öğretmen artık döngüye katılmaz, her zaman SADECE bu nöbet yerinde görevlendirilir. Hangi günde görevlendirileceği, ayrıca bir gün kısıtı belirlenmediyse değişebilir.
+                          <Lightbulb size={13} />
+                          <span>Bu öğretmen artık döngüye katılmaz, her zaman SADECE bu nöbet yerinde görevlendirilir. Hangi günde görevlendirileceği, ayrıca bir gün kısıtı belirlenmediyse değişebilir.</span>
                         </div>
                         <button className="btn btn-primary" onClick={() => handleSaveZoneRestriction(t)} disabled={savingZoneRestriction}>
                           Kaydet
@@ -1109,22 +1114,25 @@ export default function Dashboard({
 
               <div className="sep" />
               <div className="info-box" style={{ marginBottom: 0 }}>
-                💡 Okulunun MEB web sitesindeki teşkilat şeması adresini gir, sınıf ve branş öğretmenlerini otomatik çeksin (müdür, müdür yardımcıları, rehber ve anaokulu öğretmenleri hariç tutulur):
-                <input
-                  type="text"
-                  placeholder="https://okulunuz.meb.k12.tr/tema/teskilat_semasi.html"
-                  value={teskilatUrl}
-                  onChange={(e) => setTeskilatUrl(e.target.value)}
-                  style={{ marginTop: 8 }}
-                />
-                <button className="btn btn-outline" style={{ marginTop: 8, width: '100%' }} onClick={handleFetchTeskilat} disabled={fetchingTeskilat}>
-                  {fetchingTeskilat ? 'Çekiliyor...' : '👥 Teşkilat Şemasından Öğretmenleri Çek'}
-                </button>
+                <Lightbulb size={13} />
+                <div style={{ flex: 1 }}>
+                  Okulunun MEB web sitesindeki teşkilat şeması adresini gir, sınıf ve branş öğretmenlerini otomatik çeksin (müdür, müdür yardımcıları, rehber ve anaokulu öğretmenleri hariç tutulur):
+                  <input
+                    type="text"
+                    placeholder="https://okulunuz.meb.k12.tr/tema/teskilat_semasi.html"
+                    value={teskilatUrl}
+                    onChange={(e) => setTeskilatUrl(e.target.value)}
+                    style={{ marginTop: 8 }}
+                  />
+                  <button className="btn btn-outline" style={{ marginTop: 8, width: '100%' }} onClick={handleFetchTeskilat} disabled={fetchingTeskilat}>
+                    {fetchingTeskilat ? 'Çekiliyor...' : <><Users size={14} /> Teşkilat Şemasından Öğretmenleri Çek</>}
+                  </button>
+                </div>
               </div>
             </div>
 
             <div className="card">
-              <h3>🏫 Nöbet Yerleri</h3>
+              <h3><School size={17} /> Nöbet Yerleri</h3>
               <div className="form-row-3">
                 <div>
                   <label>Bölge Adı</label>
@@ -1144,7 +1152,8 @@ export default function Dashboard({
               </div>
 
               <div className="info-box">
-                💡 <strong>Sıra nasıl döner?</strong> Nöbet her hafta bu listedeki bir SONRAKİ bölgeye kayar (son bölgedeki bir sonraki hafta ilk bölgeye/güne geçer). Liste sırası önce <strong>Öncelik</strong>'e göre belirlenir (büyük sayı önce gelir), Öncelik eşitse bölgenin eklenme tarihine göre. Sırayı elle kontrol etmek istemiyorsan Öncelik'i 0 bırak — bölgeler eklenme sırasıyla dizilir. Aşağıdaki listede her bölgenin yanında güncel sırası (#1, #2, ...) gösterilir.
+                <Lightbulb size={13} />
+                <span><strong>Sıra nasıl döner?</strong> Nöbet her hafta bu listedeki bir SONRAKİ bölgeye kayar (son bölgedeki bir sonraki hafta ilk bölgeye/güne geçer). Liste sırası önce <strong>Öncelik</strong>&apos;e göre belirlenir (büyük sayı önce gelir), Öncelik eşitse bölgenin eklenme tarihine göre. Sırayı elle kontrol etmek istemiyorsan Öncelik&apos;i 0 bırak — bölgeler eklenme sırasıyla dizilir. Aşağıdaki listede her bölgenin yanında güncel sırası (#1, #2, ...) gösterilir.</span>
               </div>
 
               <label>Aktif Günler</label>
@@ -1175,7 +1184,7 @@ export default function Dashboard({
                     <button onClick={() => toggleZoneActive(z)} style={{ background: 'none', border: 'none', color: '#ccc', cursor: 'pointer', fontSize: 11, padding: '0 2px' }}>
                       {z.is_active ? 'Pasifleştir' : 'Aktifleştir'}
                     </button>
-                    <button onClick={() => handleRemoveZone(z)} style={{ background: 'none', border: 'none', color: '#f74f4f', cursor: 'pointer', fontSize: 15, padding: '0 2px' }}>×</button>
+                    <button onClick={() => handleRemoveZone(z)} aria-label="Bölgeyi sil" style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', padding: '0 2px', display: 'inline-flex', alignItems: 'center' }}><X size={14} /></button>
                   </div>
                 ))}
               </div>
@@ -1184,18 +1193,19 @@ export default function Dashboard({
 
           <div>
             <div className="card">
-              <h3>📆 Program Tarihleri</h3>
+              <h3><CalendarDays size={17} /> Program Tarihleri</h3>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
                 <div><label>Başlangıç</label><input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} /></div>
                 <div><label>Bitiş</label><input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} /></div>
               </div>
-              <div className="info-box" style={{ marginBottom: 0 }}>
-                ⚠️ Program Oluştur, seçili aralıktaki <strong>otomatik oluşturulmuş</strong> atamaları siler ve baştan üretir. Elle düzenlediğin (kilitli) atamalara dokunulmaz. Hafta sonları ve resmi tatiller otomatik atlanır.
+              <div className="info-box" style={{ marginBottom: 0, background: 'rgba(245, 158, 11, 0.1)', borderColor: 'rgba(245, 158, 11, 0.3)' }}>
+                <AlertTriangle size={13} style={{ color: 'var(--warning)' }} />
+                <span>Program Oluştur, seçili aralıktaki <strong>otomatik oluşturulmuş</strong> atamaları siler ve baştan üretir. Elle düzenlediğin (kilitli) atamalara dokunulmaz. Hafta sonları ve resmi tatiller otomatik atlanır.</span>
               </div>
             </div>
 
             <div className="card">
-              <h3>🎌 Resmi Tatiller & İstisna Günler</h3>
+              <h3><Flag size={17} /> Resmi Tatiller & İstisna Günler</h3>
               <div className="form-row">
                 <div><label>Tarih</label><input type="date" value={holidayDate} onChange={(e) => setHolidayDate(e.target.value)} /></div>
                 <div><label>Açıklama</label><input type="text" placeholder="Cumhuriyet Bayramı" value={holidayDesc} onChange={(e) => setHolidayDesc(e.target.value)} /></div>
@@ -1207,23 +1217,26 @@ export default function Dashboard({
                 )}
                 {sortedHolidayDates.map((h) => (
                   <div className="holiday-tag" key={h.id}>
-                    🗓 {formatDate(h.calendar_date)} – {h.description || 'Tatil'}
-                    <button disabled={savingHoliday} onClick={() => handleRemoveHoliday(h.id)}>×</button>
+                    <CalendarDays size={12} /> {formatDate(h.calendar_date)} – {h.description || 'Tatil'}
+                    <button disabled={savingHoliday} onClick={() => handleRemoveHoliday(h.id)} aria-label="Kaldır"><X size={12} /></button>
                   </div>
                 ))}
               </div>
 
               <div className="sep" />
               <div className="info-box" style={{ marginBottom: 0 }}>
-                💡 2026-2027 eğitim öğretim yılı resmi tatillerini otomatik yükle:
-                <button className="btn btn-outline" style={{ marginTop: 8, width: '100%' }} onClick={handleLoadDefaultHolidays} disabled={savingHoliday}>
-                  🇹🇷 2026-2027 Eğitim Öğretim Yılı Tatillerini Yükle
-                </button>
+                <Lightbulb size={13} />
+                <div style={{ flex: 1 }}>
+                  2026-2027 eğitim öğretim yılı resmi tatillerini otomatik yükle:
+                  <button className="btn btn-outline" style={{ marginTop: 8, width: '100%' }} onClick={handleLoadDefaultHolidays} disabled={savingHoliday}>
+                    <Flag size={14} /> 2026-2027 Eğitim Öğretim Yılı Tatillerini Yükle
+                  </button>
+                </div>
               </div>
             </div>
 
             <div className="card">
-              <h3>⚖️ Dağıtım Ayarları</h3>
+              <h3><Scale size={17} /> Dağıtım Ayarları</h3>
               <div>
                 <label>Dönme Düzeni</label>
                 <select
@@ -1245,14 +1258,17 @@ export default function Dashboard({
                 </select>
               </div>
               <div className="info-box" style={{ marginTop: 10, marginBottom: 0 }}>
-                💡 {ROTATION_MODE_DESCRIPTIONS[rotationMode]}
-                <br /><br />
-                Tatil ve okulun kapalı olduğu dönemlerde sıra İLERLEMEZ, kaldığı yerden devam eder.
+                <Lightbulb size={13} />
+                <span>
+                  {ROTATION_MODE_DESCRIPTIONS[rotationMode]}
+                  <br /><br />
+                  Tatil ve okulun kapalı olduğu dönemlerde sıra İLERLEMEZ, kaldığı yerden devam eder.
+                </span>
               </div>
             </div>
 
             <div className="card">
-              <h3>🏫 Okul Bilgileri</h3>
+              <h3><School size={17} /> Okul Bilgileri</h3>
               <div>
                 <label>Okul Müdürü Adı Soyadı</label>
                 <input
@@ -1290,12 +1306,13 @@ export default function Dashboard({
                 />
               </div>
               <div className="info-box" style={{ marginTop: 10, marginBottom: 0 }}>
-                💡 Resmi nöbet çizelgesi çıktısında imza bloğuna otomatik yazılır.
+                <Lightbulb size={13} />
+                <span>Resmi nöbet çizelgesi çıktısında imza bloğuna otomatik yazılır.</span>
               </div>
             </div>
 
             <div className="card">
-              <h3>🧩 Kurallar</h3>
+              <h3><Puzzle size={17} /> Kurallar</h3>
               <div className="info-box">
                 Program otomatik oluşturulurken her atamada kontrol edilir. Kapatırsan o kural artık kimseyi elemez.
               </div>
@@ -1316,12 +1333,12 @@ export default function Dashboard({
             </div>
 
             <div className="card">
-              <h3>👑 Hesabım</h3>
+              <h3><Crown size={17} /> Hesabım</h3>
               {!subscriptionStatus ? (
                 <div style={{ color: 'var(--muted)', fontSize: 13 }}>Abonelik bilgisi bulunamadı.</div>
               ) : (
-                <div className="person-tag" style={{ display: 'inline-block', fontSize: 12, background: isPremiumClient ? 'var(--success)' : 'var(--accent2)', color: isPremiumClient ? '#0f2e1a' : '#3a2c00', marginBottom: 8 }}>
-                  {isPremiumClient ? '✓ Premium Aktif' : subscriptionStatus.label}
+                <div className="person-tag" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, background: isPremiumClient ? 'var(--success)' : 'var(--warning)', color: isPremiumClient ? '#0f2e1a' : '#3a2c00', marginBottom: 8 }}>
+                  {isPremiumClient ? <><Check size={12} /> Premium Aktif</> : subscriptionStatus.label}
                 </div>
               )}
 
@@ -1337,22 +1354,25 @@ export default function Dashboard({
                   </div>
                   <div style={{ background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 12px', marginBottom: 10 }}>
                     <div style={{ fontSize: 10, color: 'var(--muted)', textTransform: 'uppercase' }}>Standart</div>
-                    <div style={{ fontSize: 20, fontFamily: "'Bebas Neue', sans-serif", color: 'var(--accent)' }}>{formatTL(STANDARD_YEARLY_PRICE)} <span style={{ fontSize: 12, color: 'var(--muted)', fontFamily: 'inherit' }}>/ yıl</span></div>
+                    <div style={{ fontSize: 20, fontFamily: 'var(--font-heading)', fontWeight: 800, color: 'var(--primary)' }}>{formatTL(STANDARD_YEARLY_PRICE)} <span style={{ fontSize: 12, color: 'var(--muted)', fontFamily: 'inherit', fontWeight: 400 }}>/ yıl</span></div>
                   </div>
                   <button className="btn btn-success" style={{ width: '100%', marginBottom: 10 }} onClick={() => setPremiumPrompt('account')}>Premium'a Geç</button>
                 </>
               )}
               <div className="info-box" style={{ marginBottom: 0 }}>
-                💡 Tüm planları görmek için{' '}
-                <a href="/fiyatlandirma" target="_blank" rel="noreferrer" style={{ color: 'var(--accent)' }}>fiyatlandırma sayfasına</a> bakabilirsin.
+                <Lightbulb size={13} />
+                <span>
+                  Tüm planları görmek için{' '}
+                  <a href="/fiyatlandirma" target="_blank" rel="noreferrer" style={{ color: 'var(--primary-hover)' }}>fiyatlandırma sayfasına</a> bakabilirsin.
+                </span>
               </div>
             </div>
 
             <button className="btn btn-success btn-xl" onClick={handleGenerate} disabled={running || viewing}>
-              {running ? 'Oluşturuluyor...' : '✨ PROGRAM OLUŞTUR'}
+              {running ? 'Oluşturuluyor...' : <><Sparkles size={16} /> PROGRAM OLUŞTUR</>}
             </button>
             <button className="btn btn-outline" style={{ width: '100%', marginTop: 10 }} onClick={handleView} disabled={running || viewing}>
-              {viewing ? 'Yükleniyor...' : '👁️ Mevcut Aralığı Görüntüle'}
+              {viewing ? 'Yükleniyor...' : <><Eye size={16} /> Mevcut Aralığı Görüntüle</>}
             </button>
             {result?.error && <div className="holiday-tag" style={{ marginTop: 10 }}>{result.error}</div>}
           </div>
@@ -1362,11 +1382,11 @@ export default function Dashboard({
       {/* ═══════ TAB: PROGRAM ═══════ */}
       <div className={`tab-content ${activeTab === 'program' ? 'active' : ''}`}>
         {!viewedRange ? (
-          <div style={{ textAlign: 'center', padding: 60, color: 'var(--muted)' }}>
-            <div style={{ fontSize: 48, marginBottom: 16 }}>📅</div>
-            <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 24, letterSpacing: 2 }}>Henüz program oluşturulmadı</div>
-            <div style={{ marginTop: 8, fontSize: 14 }}>Ayarlar sekmesinden personel, bölge ve tarihleri belirleyin</div>
-          </div>
+          <EmptyState
+            icon={<Calendar size={40} />}
+            title="Henüz program oluşturulmadı"
+            subtitle="Ayarlar sekmesinden personel, bölge ve tarihleri belirleyin"
+          />
         ) : (
           <div>
             {months.length > 0 && (
@@ -1378,16 +1398,16 @@ export default function Dashboard({
                     onClick={() => handleSelectMonth(m)}
                     disabled={loadingMonth && activeMonthKey === m.key}
                   >
-                    {m.label}{m.locked ? ' 🔒' : ''}
+                    {m.label}{m.locked ? <Lock size={11} style={{ marginLeft: 4, verticalAlign: -1 }} /> : ''}
                   </button>
                 ))}
               </div>
             )}
             <div className="stats-grid">
-              <div className="stat-card"><span className="stat-icon">📅</span><div><div className="stat-num">{table.dates.filter((d) => !holidaysByDate.has(d)).length}</div><div className="stat-lbl">Aktif Gün</div></div></div>
-              <div className="stat-card"><span className="stat-icon">👥</span><div><div className="stat-num">{teachers.length}</div><div className="stat-lbl">Personel</div></div></div>
-              <div className="stat-card"><span className="stat-icon">🏫</span><div><div className="stat-num">{zones.length}</div><div className="stat-lbl">Nöbet Yeri</div></div></div>
-              <div className="stat-card"><span className="stat-icon">✅</span><div><div className="stat-num">{rows.length}</div><div className="stat-lbl">Toplam Nöbet</div></div></div>
+              <div className="stat-card"><span className="stat-icon"><Calendar size={20} /></span><div><div className="stat-num">{table.dates.filter((d) => !holidaysByDate.has(d)).length}</div><div className="stat-lbl">Aktif Gün</div></div></div>
+              <div className="stat-card"><span className="stat-icon"><Users size={20} /></span><div><div className="stat-num">{teachers.length}</div><div className="stat-lbl">Personel</div></div></div>
+              <div className="stat-card"><span className="stat-icon"><School size={20} /></span><div><div className="stat-num">{zones.length}</div><div className="stat-lbl">Nöbet Yeri</div></div></div>
+              <div className="stat-card"><span className="stat-icon"><CheckCircle2 size={20} /></span><div><div className="stat-num">{rows.length}</div><div className="stat-lbl">Toplam Nöbet</div></div></div>
             </div>
             <div className="schedule-wrapper printable-schedule">
               <table className="schedule-table">
@@ -1414,7 +1434,7 @@ export default function Dashboard({
                             <td className="td-day">{DAY_TR[getWeekday(date)]}</td>
                             {holidayDesc !== undefined ? (
                               <td className="td-holiday" colSpan={table.zoneNames.length}>
-                                🎌 {holidayDesc || 'Tatil'} — KAPALI
+                                <Flag size={11} style={{ verticalAlign: -1 }} /> {holidayDesc || 'Tatil'} — KAPALI
                               </td>
                             ) : (
                               table.zoneNames.map((z) => (
@@ -1437,12 +1457,12 @@ export default function Dashboard({
               </table>
             </div>
             <div className="export-section">
-              <button className="btn btn-primary btn-lg" onClick={exportCSV}>{isPremiumClient ? '📥' : '🔒'} CSV İndir</button>
-              <button className="btn btn-outline btn-lg" onClick={exportHTML}>{isPremiumClient ? '📄' : '🔒'} Word İndir</button>
-              <button className="btn btn-outline btn-lg" onClick={exportPDF}>{isPremiumClient ? '📄' : '🔒'} PDF İndir</button>
-              <button className="btn btn-outline btn-lg" onClick={exportExcel}>{isPremiumClient ? '📊' : '🔒'} Excel İndir</button>
-              <button className="btn btn-outline btn-lg" onClick={printSchedule}>{isPremiumClient ? '🖨️' : '🔒'} Yazdır</button>
-              <button className="btn btn-outline btn-lg" onClick={handleShare} disabled={sharingBusy}>{isPremiumClient ? '🔗' : '🔒'} Paylaş</button>
+              <button className="btn btn-primary btn-lg" onClick={exportCSV}>{isPremiumClient ? <Download size={15} /> : <Lock size={15} />} CSV İndir</button>
+              <button className="btn btn-outline btn-lg" onClick={exportHTML}>{isPremiumClient ? <FileText size={15} /> : <Lock size={15} />} Word İndir</button>
+              <button className="btn btn-outline btn-lg" onClick={exportPDF}>{isPremiumClient ? <FileText size={15} /> : <Lock size={15} />} PDF İndir</button>
+              <button className="btn btn-outline btn-lg" onClick={exportExcel}>{isPremiumClient ? <BarChart3 size={15} /> : <Lock size={15} />} Excel İndir</button>
+              <button className="btn btn-outline btn-lg" onClick={printSchedule}>{isPremiumClient ? <Printer size={15} /> : <Lock size={15} />} Yazdır</button>
+              <button className="btn btn-outline btn-lg" onClick={handleShare} disabled={sharingBusy}>{isPremiumClient ? <Link2 size={15} /> : <Lock size={15} />} Paylaş</button>
             </div>
           </div>
         )}
@@ -1451,13 +1471,10 @@ export default function Dashboard({
       {/* ═══════ TAB: DAĞILIM ═══════ */}
       <div className={`tab-content ${activeTab === 'dagitim' ? 'active' : ''}`}>
         {!distribution.length ? (
-          <div style={{ textAlign: 'center', padding: 60, color: 'var(--muted)' }}>
-            <div style={{ fontSize: 48, marginBottom: 16 }}>📊</div>
-            <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 24, letterSpacing: 2 }}>Program henüz oluşturulmadı</div>
-          </div>
+          <EmptyState icon={<BarChart3 size={40} />} title="Program henüz oluşturulmadı" />
         ) : (
           <div className="card">
-            <h3>📊 Kişi Başı Nöbet Dağılımı (görüntülenen aralık)</h3>
+            <h3><BarChart3 size={17} /> Kişi Başı Nöbet Dağılımı (görüntülenen aralık)</h3>
             <table className="distrib-table">
               <thead>
                 <tr><th>Renk</th><th>Ad Soyad</th><th>Nöbet Sayısı</th><th>Dağılım</th></tr>
@@ -1470,7 +1487,7 @@ export default function Dashboard({
                     <tr key={p.name}>
                       <td><div className="person-color" style={{ background: `#${color}`, margin: 'auto' }} /></td>
                       <td style={{ fontWeight: 600, fontSize: 13 }}>{p.name}</td>
-                      <td style={{ textAlign: 'center', fontFamily: "'Bebas Neue', sans-serif", fontSize: 18, color: 'var(--accent)' }}>{p.count}</td>
+                      <td style={{ textAlign: 'center', fontFamily: 'var(--font-heading)', fontWeight: 800, fontSize: 18, color: 'var(--primary)' }}>{p.count}</td>
                       <td><div className="distrib-bar-wrap"><div className="distrib-bar" style={{ width: `${pct}%`, background: `#${color}` }} /></div></td>
                     </tr>
                   );
@@ -1481,17 +1498,19 @@ export default function Dashboard({
         )}
       </div>
 
-      <div id="toast" className={toast.visible ? 'show' : ''} style={{ background: toast.isErr ? 'var(--danger)' : 'var(--success)', color: toast.isErr ? '#fff' : '#0f2e1a' }}>
-        {toast.msg}
-      </div>
+      <Toast toast={toast} />
 
-      {successStats && (
-        <SuccessScreen
-          stats={successStats}
-          onContinue={() => { setSuccessStats(null); setActiveTab('program'); }}
-        />
-      )}
-      {premiumPrompt && <PremiumScreen reason={premiumPrompt} onClose={() => setPremiumPrompt(null)} />}
+      <AnimatePresence>
+        {successStats && (
+          <SuccessScreen
+            stats={successStats}
+            onContinue={() => { setSuccessStats(null); setActiveTab('program'); }}
+          />
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {premiumPrompt && <PremiumScreen reason={premiumPrompt} onClose={() => setPremiumPrompt(null)} />}
+      </AnimatePresence>
     </div>
   );
 }
@@ -1502,30 +1521,30 @@ export default function Dashboard({
 // dosyaya çıkarmaya gerek yok (CLAUDE.md YAGNI).
 function SuccessScreen({ stats, onContinue }) {
   const items = [
-    { icon: '✅', label: 'Toplam Nöbet', value: stats.totalDutyCount },
-    { icon: '👥', label: 'Öğretmen Sayısı', value: stats.teacherCount },
-    { icon: '🏫', label: 'Nöbet Alanı', value: stats.zoneCount },
-    { icon: '⚠️', label: 'Boş Kalan Yer', value: stats.conflictCount },
-    { icon: '⚖️', label: 'Adalet Puanı', value: `${stats.fairnessScore}/100` },
-    { icon: '⏱️', label: 'Oluşturma Süresi', value: `${(stats.durationMs / 1000).toFixed(1)} sn` },
-    { icon: '💡', label: 'Tahmini Zaman Tasarrufu', value: `${Math.round(stats.estimatedMinutesSaved / 60)} saat` },
+    { icon: CheckCircle2, label: 'Toplam Nöbet', value: stats.totalDutyCount },
+    { icon: Users, label: 'Öğretmen Sayısı', value: stats.teacherCount },
+    { icon: School, label: 'Nöbet Alanı', value: stats.zoneCount },
+    { icon: AlertTriangle, label: 'Boş Kalan Yer', value: stats.conflictCount },
+    { icon: Scale, label: 'Adalet Puanı', value: `${stats.fairnessScore}/100` },
+    { icon: Timer, label: 'Oluşturma Süresi', value: `${(stats.durationMs / 1000).toFixed(1)} sn` },
+    { icon: Lightbulb, label: 'Tahmini Zaman Tasarrufu', value: `${Math.round(stats.estimatedMinutesSaved / 60)} saat` },
   ];
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }}>
-      <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: 28, maxWidth: 460, width: '100%', maxHeight: '90vh', overflowY: 'auto', textAlign: 'center' }}>
-        <div style={{ fontSize: 40, marginBottom: 8 }}>🎉</div>
-        <h2 style={{ fontFamily: "'Bebas Neue', sans-serif", letterSpacing: 1, fontSize: 26, margin: 0 }}>Program başarıyla oluşturuldu</h2>
+    <Modal onClose={onContinue} labelledBy="success-screen-title" maxWidth={460}>
+      <div style={{ textAlign: 'center' }}>
+        <PartyPopper size={36} color="var(--primary)" style={{ marginBottom: 8 }} />
+        <h2 id="success-screen-title" style={{ fontFamily: 'var(--font-heading)', fontWeight: 800, fontSize: 24, margin: 0 }}>Program başarıyla oluşturuldu</h2>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, margin: '20px 0', textAlign: 'left' }}>
           {items.map((it) => (
             <div key={it.label} style={{ background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 12px' }}>
-              <div style={{ fontSize: 11, color: 'var(--muted)' }}>{it.icon} {it.label}</div>
-              <div style={{ fontSize: 18, fontFamily: "'Bebas Neue', sans-serif", color: 'var(--accent)' }}>{it.value}</div>
+              <div style={{ fontSize: 11, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 4 }}><it.icon size={12} /> {it.label}</div>
+              <div style={{ fontSize: 18, fontFamily: 'var(--font-heading)', fontWeight: 800, color: 'var(--primary)' }}>{it.value}</div>
             </div>
           ))}
         </div>
         <button className="btn btn-success btn-xl" style={{ width: '100%' }} onClick={onContinue}>Devam Et</button>
       </div>
-    </div>
+    </Modal>
   );
 }

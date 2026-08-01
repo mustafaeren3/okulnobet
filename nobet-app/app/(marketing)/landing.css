@@ -1,0 +1,192 @@
+/* Yalnızca kök `/` sayfasına özel bölümler (dashboard demo, video,
+   süreç akışı, pilot notları, SSS accordion, kapanış CTA'sı) — genel
+   marketing düzeni marketing.css'te, 300 satır sınırı için ayrıldı. */
+
+.mkt-narrow-section { max-width: 720px; margin-left: auto; margin-right: auto; }
+
+.mkt-section-head { text-align: center; max-width: 560px; margin: 0 auto 32px; }
+.mkt-eyebrow {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--primary-hover);
+  margin-bottom: 10px;
+}
+.mkt-section-head h2 { margin-bottom: 8px; }
+.mkt-section-sub { color: var(--text-muted); font-size: 15px; margin: 0; }
+
+/* ── HERO TRUST BAR ─────────────────────────────────────────────── */
+.mkt-hero-trustbar { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 24px; }
+.mkt-hero-trustbar span { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-muted); font-weight: 600; }
+.mkt-hero-trustbar svg { color: var(--accent); }
+
+/* ── DASHBOARD DEMO WINDOW ──────────────────────────────────────── */
+.mkt-demo-section { max-width: 920px; margin-left: auto; margin-right: auto; }
+.demo-window {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+  overflow: hidden;
+}
+.demo-titlebar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--card);
+}
+.demo-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.demo-url { margin-left: 10px; font-size: 12px; color: var(--text-muted); font-family: monospace; }
+.demo-live { margin-left: auto; display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--accent); font-weight: 700; }
+.demo-live-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); animation: demo-pulse 1.8s ease-in-out infinite; }
+@keyframes demo-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+.demo-tabs { display: flex; gap: 4px; padding: 10px 16px 0; border-bottom: 1px solid var(--border); background: var(--surface); }
+.demo-tab {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 14px; font-size: 12px; font-weight: 600; color: var(--text-muted);
+  border-bottom: 2px solid transparent;
+}
+.demo-tab.active { color: var(--primary-hover); border-bottom-color: var(--primary); }
+.demo-body { padding: 20px; }
+.demo-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 16px; }
+.demo-stat { display: flex; align-items: center; gap: 8px; background: var(--card); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px 12px; color: var(--primary); }
+.demo-stat-num { font-family: var(--font-heading); font-weight: 800; font-size: 16px; color: var(--text); line-height: 1.1; }
+.demo-stat-lbl { font-size: 10px; color: var(--text-muted); }
+.demo-table { border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; }
+.demo-table-row { display: grid; grid-template-columns: repeat(5, 1fr); }
+.demo-table-head span { font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; background: var(--card); padding: 8px; text-align: center; }
+.demo-table-row:not(.demo-table-head) span {
+  padding: 10px 6px;
+  text-align: center;
+  font-size: 11px;
+  border-top: 1px solid var(--border);
+  color: var(--text-muted);
+}
+.demo-cell.filled { color: var(--text); background: rgba(79, 124, 255, 0.08); font-weight: 600; }
+
+@media (max-width: 640px) {
+  .demo-stats { grid-template-columns: repeat(2, 1fr); }
+  .demo-table-row { grid-template-columns: repeat(3, 1fr); }
+  .demo-table-row span:nth-child(n+4) { display: none; }
+}
+
+/* ── VIDEO PLACEHOLDER ──────────────────────────────────────────── */
+.video-placeholder {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  border-radius: var(--radius-lg);
+  background: linear-gradient(135deg, var(--surface), var(--card));
+  border: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+}
+.video-placeholder-play {
+  width: 64px; height: 64px;
+  border-radius: 50%;
+  border: none;
+  background: var(--primary);
+  color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  cursor: not-allowed;
+  box-shadow: 0 10px 30px rgba(79, 124, 255, 0.35);
+}
+.video-placeholder-label { font-size: 13px; color: var(--text-muted); font-weight: 600; }
+
+/* ── SÜREÇ ADIMLARI ─────────────────────────────────────────────── */
+.process-steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 24px; }
+.process-step { position: relative; }
+.process-step-num {
+  display: inline-flex; align-items: center; gap: 8px;
+  color: var(--primary);
+  font-family: var(--font-heading);
+  font-weight: 800;
+  font-size: 13px;
+  margin-bottom: 12px;
+}
+.process-step-num span { color: var(--text-muted); }
+.process-step h4 { margin: 0 0 6px; font-size: 15px; }
+.process-step p { margin: 0; font-size: 13px; color: var(--text-muted); line-height: 1.6; }
+.process-step-connector {
+  display: none;
+}
+@media (min-width: 900px) {
+  .process-step:not(:last-child) .process-step-connector {
+    display: block;
+    position: absolute;
+    top: 12px;
+    left: calc(100% + 4px);
+    width: calc(24px - 8px);
+    height: 1px;
+    background: var(--border);
+  }
+}
+@media (max-width: 760px) {
+  .process-steps { grid-template-columns: 1fr; gap: 28px; }
+}
+
+/* ── PİLOT NOTLARI ──────────────────────────────────────────────── */
+.mkt-pilot-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+.mkt-pilot-card p { font-size: 14px; line-height: 1.6; color: var(--text); margin: 0 0 14px; font-style: italic; }
+.mkt-pilot-role { font-size: 12px; color: var(--text-muted); font-weight: 600; }
+
+/* ── FİYAT KARTI ROZETİ ─────────────────────────────────────────── */
+.mkt-pricing-highlight { position: relative; }
+.mkt-pricing-badge {
+  position: absolute;
+  top: -11px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--primary);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  padding: 3px 12px;
+  border-radius: var(--radius-lg);
+}
+
+/* ── SSS ACCORDION ──────────────────────────────────────────────── */
+.faq-accordion { display: flex; flex-direction: column; gap: 8px; }
+.faq-accordion-item { border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--card); }
+.faq-accordion-trigger {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: none;
+  border: none;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+  text-align: left;
+  padding: 16px 18px;
+  cursor: pointer;
+}
+.faq-accordion-trigger svg { color: var(--text-muted); flex-shrink: 0; }
+.faq-accordion-answer { margin: 0; padding: 0 18px 16px; font-size: 13px; color: var(--text-muted); line-height: 1.7; }
+
+/* ── KAPANIŞ CTA ────────────────────────────────────────────────── */
+.mkt-cta-banner {
+  text-align: center;
+  margin: 80px 0 40px;
+  padding: 56px 32px;
+  border-radius: var(--radius-lg);
+  background: linear-gradient(135deg, rgba(79, 124, 255, 0.12), rgba(22, 199, 132, 0.08));
+  border: 1px solid var(--border);
+}
+.mkt-cta-banner h2 { margin: 0 0 10px; }
+.mkt-cta-banner p { color: var(--text-muted); margin: 0 0 24px; font-size: 15px; }
+.mkt-cta-banner-contact { margin-top: 18px; font-size: 13px; color: var(--text-muted); }
+.mkt-cta-banner-contact a { color: var(--primary-hover); text-decoration: none; }
+.mkt-cta-banner-contact a:hover { text-decoration: underline; }

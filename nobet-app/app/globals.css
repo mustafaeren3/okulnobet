@@ -1,0 +1,127 @@
+/* Paylaşılan tasarım tokenları — tüm route'lar tek bir yerden okur.
+   Eski değişken adları (--surface2, --muted, --accent2) alias olarak
+   korunuyor: Dashboard.jsx/super-admin sayfalarındaki onlarca inline
+   style={{ color: 'var(--muted)' }} kullanımı JSX'e dokunmadan çalışmaya
+   devam etsin diye (bkz. Faz 2 plan §10 — bu alias'lar kalıcı, silinmiyor).
+   Bileşen bazlı stiller (Modal/Navbar/Footer/Badge/Alert/Toast/...)
+   app/components.css'te — bu dosya yalnızca token + temel reset + Button/Card. */
+
+:root {
+  --bg: #0b1220;
+  --surface: #131b2e;
+  --card: #182235;
+  --primary: #4f7cff;
+  --primary-hover: #6a8fff;
+  --secondary: #64748b;
+  --accent: #16c784;
+  --success: #16c784;
+  --warning: #f59e0b;
+  --danger: #ef4444;
+  --border: rgba(255, 255, 255, 0.08);
+  --text: #f8fafc;
+  --text-muted: #94a3b8;
+
+  /* Üç seviyeli radius skalası — magic number yerine tek kaynak. */
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-btn: var(--radius-md);
+
+  /* next/font'un ürettiği CSS değişkeni app/layout.jsx'te <html>'e
+     bağlanıyor; burada tek isim altında hem başlık hem gövde için
+     kullanılıyor (bkz. PHASE plan: tek font ailesi, ağırlıkla ayrışır). */
+  --font-heading: var(--font-inter), sans-serif;
+  --font-body: var(--font-inter), sans-serif;
+
+  /* Eski isimler — Dashboard.jsx/super-admin inline style'ları için kalıcı
+     geriye dönük uyumluluk (bkz. yukarıdaki dosya açıklaması). */
+  --surface2: var(--card);
+  --muted: var(--text-muted);
+  --accent2: var(--accent);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--bg);
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+a {
+  color: inherit;
+}
+
+/* ── BUTTON (site genelinde paylaşılıyor) ──────────────────────── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: none;
+  border-radius: var(--radius-btn);
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 11px 20px;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: box-shadow 0.2s, border-color 0.2s, background 0.2s, color 0.2s;
+}
+.btn-lg { padding: 15px 28px; font-size: 15.5px; }
+/* Faz 2: gradient azaltıldı — düz renk, hover'da yalnızca hafif glow. */
+.btn-primary {
+  background: var(--primary);
+  color: #fff;
+  box-shadow: 0 6px 16px rgba(79, 124, 255, 0.22);
+}
+.btn-primary:hover:not(:disabled) { background: var(--primary-hover); box-shadow: 0 8px 20px rgba(79, 124, 255, 0.32); }
+.btn-secondary {
+  background: var(--secondary);
+  color: #fff;
+}
+.btn-secondary:hover:not(:disabled) { filter: brightness(1.1); }
+.btn-warning {
+  background: transparent;
+  color: var(--warning);
+  border: 1px solid var(--warning);
+}
+.btn-warning:hover:not(:disabled) { background: rgba(245, 158, 11, 0.1); }
+.btn-outline {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+.btn-outline:hover:not(:disabled) { border-color: var(--primary-hover); }
+.btn-ghost {
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px solid transparent;
+}
+.btn-ghost:hover:not(:disabled) { color: var(--text); background: rgba(255, 255, 255, 0.04); }
+.btn-danger {
+  background: transparent;
+  color: var(--danger);
+  border: 1px solid var(--danger);
+}
+.btn-danger:hover:not(:disabled) { background: rgba(239, 68, 68, 0.08); }
+.btn:disabled { opacity: 0.55; cursor: not-allowed; }
+
+/* ── CARD ───────────────────────────────────────────────────────── */
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 24px;
+}

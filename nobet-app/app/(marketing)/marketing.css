@@ -1,56 +1,19 @@
-@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600;700&display=swap');
+/* Renk/font tokenları artık app/globals.css'te (:root) tanımlı — burada
+   yalnızca marketing route'una özel yerleşim/bileşen kuralları var. */
 
 .mkt-root {
-  --bg: #0f1117;
-  --surface: #1a1d27;
-  --surface2: #22263a;
-  --border: #2e3350;
-  --accent: #4f7ef7;
-  --accent2: #f7c14f;
-  --danger: #f74f4f;
-  --success: #4ff7a0;
-  --text: #e8ecff;
-  --muted: #7a82a8;
-
-  font-family: 'DM Sans', sans-serif;
   color: var(--text);
   min-height: 100vh;
 }
 .mkt-root * { box-sizing: border-box; }
 
-/* ── HEADER ─────────────────────────────────────── */
-.mkt-header {
-  display: flex;
-  align-items: center;
-  gap: 24px;
-  padding: 18px 32px;
-  border-bottom: 1px solid var(--border);
-  position: sticky;
-  top: 0;
-  background: rgba(15, 17, 23, 0.92);
-  backdrop-filter: blur(6px);
-  z-index: 100;
-}
-.mkt-logo {
-  font-family: 'Bebas Neue', sans-serif;
-  font-size: 22px;
-  letter-spacing: 2px;
-  background: linear-gradient(90deg, var(--accent), var(--accent2));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  text-decoration: none;
-}
-.mkt-nav { display: flex; gap: 18px; margin-left: 12px; }
-.mkt-nav a { color: var(--muted); text-decoration: none; font-size: 14px; font-weight: 600; }
-.mkt-nav a:hover { color: var(--text); }
-.mkt-header-actions { margin-left: auto; display: flex; gap: 10px; }
-
-/* ── BUTTONS ────────────────────────────────────── */
+/* ── BUTTONS (eski .mkt-btn sınıfları — hâlâ inline sayfalarda kullanılan
+   bazı yerler için köprü, asıl yeni CTA'lar Button.jsx / .btn kullanıyor) ── */
 .mkt-btn {
   display: inline-block;
   border: none;
-  border-radius: 8px;
-  font-family: 'DM Sans', sans-serif;
+  border-radius: var(--radius-btn);
+  font-family: var(--font-body);
   font-size: 13px;
   font-weight: 700;
   cursor: pointer;
@@ -58,91 +21,109 @@
   text-decoration: none;
   white-space: nowrap;
 }
-.mkt-btn-primary { background: var(--accent); color: #fff; }
+.mkt-btn-primary { background: var(--primary); color: #fff; }
 .mkt-btn-outline { background: transparent; color: var(--text); border: 1px solid var(--border); }
-.mkt-btn-lg { padding: 14px 28px; font-size: 15px; border-radius: 10px; }
+.mkt-btn-lg { padding: 14px 28px; font-size: 15px; }
 
 /* ── LAYOUT ─────────────────────────────────────── */
-.mkt-main { max-width: 960px; margin: 0 auto; padding: 48px 24px 80px; }
+.mkt-main { max-width: 1120px; margin: 0 auto; padding: 48px 24px 96px; }
 .mkt-main.mkt-narrow { max-width: 760px; }
 
 .mkt-hero { text-align: center; padding: 60px 24px 40px; }
 .mkt-hero h1 {
-  font-family: 'Bebas Neue', sans-serif;
-  font-size: 44px;
-  letter-spacing: 1px;
-  margin: 0 0 16px;
-  line-height: 1.15;
+  font-family: var(--font-heading);
+  font-weight: 800;
+  font-size: 48px;
+  letter-spacing: -1px;
+  margin: 0 0 20px;
+  line-height: 1.1;
 }
-.mkt-hero p { color: var(--muted); font-size: 17px; max-width: 600px; margin: 0 auto 28px; }
-.mkt-hero-actions { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
+.mkt-hero p { color: var(--text-muted); font-size: 18px; line-height: 1.6; max-width: 600px; margin: 0 auto 32px; }
+.mkt-hero-actions { display: flex; align-items: center; gap: 20px; justify-content: center; flex-wrap: wrap; }
+.mkt-hero-secondary-link {
+  color: var(--text-muted);
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 600;
+  transition: color 0.15s;
+}
+.mkt-hero-secondary-link:hover { color: var(--text); }
 
-.mkt-section { margin: 56px 0; }
+.mkt-section { margin: 72px 0; }
 .mkt-section h2 {
-  font-family: 'Bebas Neue', sans-serif;
-  font-size: 26px;
-  letter-spacing: 1px;
-  color: var(--accent2);
-  margin-bottom: 20px;
+  font-family: var(--font-heading);
+  font-weight: 800;
+  font-size: 30px;
+  letter-spacing: -0.5px;
+  color: var(--text);
+  margin-bottom: 28px;
 }
 .mkt-section h3 { font-size: 16px; margin: 20px 0 8px; }
-.mkt-section p, .mkt-section li { color: var(--muted); line-height: 1.7; font-size: 14px; }
+.mkt-section p, .mkt-section li { color: var(--text-muted); line-height: 1.7; font-size: 14px; }
 
 .mkt-card {
-  background: var(--surface);
+  background: var(--card);
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: 16px;
   padding: 24px;
   margin-bottom: 16px;
 }
 
 .mkt-feature-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
-.mkt-feature-grid .mkt-card { margin-bottom: 0; }
-.mkt-feature-grid .mkt-icon { font-size: 28px; margin-bottom: 10px; }
+.mkt-feature-grid .card, .mkt-feature-grid .mkt-card { margin-bottom: 0; }
+.mkt-feature-grid .mkt-icon {
+  width: 40px; height: 40px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: var(--radius-sm);
+  background: rgba(79, 124, 255, 0.12);
+  color: var(--primary);
+  margin-bottom: 14px;
+}
 .mkt-feature-grid h4 { margin: 0 0 6px; font-size: 15px; }
 .mkt-feature-grid p { margin: 0; font-size: 13px; }
 
-/* ── PRICING ────────────────────────────────────── */
-.mkt-pricing-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
-.mkt-pricing-card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 22px;
-  text-align: center;
+/* ── HERO (split layout: metin + statik mockup) ──── */
+.mkt-hero-split {
+  display: grid;
+  grid-template-columns: 1.1fr 1fr;
+  align-items: center;
+  gap: 56px;
+  text-align: left;
+  padding: 80px 24px 48px;
 }
-.mkt-pricing-card.mkt-pricing-highlight { border-color: var(--accent); }
-.mkt-pricing-card .mkt-tier-label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 10px; }
-.mkt-pricing-card .mkt-price { font-family: 'Bebas Neue', sans-serif; font-size: 30px; color: var(--accent); }
-.mkt-pricing-card .mkt-price-sub { font-size: 11px; color: var(--muted); margin-bottom: 14px; }
+.mkt-hero-split .mkt-hero-copy h1 { font-size: 46px; }
+.mkt-hero-split .mkt-hero-copy p { margin: 0 0 32px; max-width: 460px; }
+.mkt-hero-visual { display: flex; justify-content: center; }
+@media (max-width: 860px) {
+  .mkt-hero-split { grid-template-columns: 1fr; text-align: center; padding-top: 40px; }
+  .mkt-hero-split .mkt-hero-copy p { margin-left: auto; margin-right: auto; }
+  .mkt-hero-split .mkt-hero-actions { justify-content: center !important; }
+  .mkt-hero-visual { order: -1; }
+}
+
+/* ── PRICING (kart görünümü artık paylaşılan Card/.card bileşeninden
+   geliyor — burada yalnızca grid ve metin hizası kalıyor) ────────── */
+.mkt-pricing-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
+.mkt-pricing-card { text-align: center; }
+.mkt-pricing-card.mkt-pricing-highlight { border-color: var(--primary); }
+.mkt-pricing-card .mkt-tier-label { font-size: 12px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 10px; }
+.mkt-pricing-card .mkt-price { font-family: var(--font-heading); font-weight: 800; font-size: 30px; color: var(--primary); }
+.mkt-pricing-card .mkt-price-sub { font-size: 11px; color: var(--text-muted); margin-bottom: 14px; }
 .mkt-billing-toggle { display: flex; justify-content: center; gap: 4px; margin-bottom: 28px; }
 .mkt-billing-toggle button {
-  background: none; border: 1px solid var(--border); color: var(--muted);
+  background: none; border: 1px solid var(--border); color: var(--text-muted);
   padding: 8px 18px; font-size: 13px; font-weight: 600; cursor: pointer;
 }
 .mkt-billing-toggle button:first-child { border-radius: 8px 0 0 8px; }
 .mkt-billing-toggle button:last-child { border-radius: 0 8px 8px 0; }
-.mkt-billing-toggle button.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.mkt-billing-toggle button.active { background: var(--primary); color: #fff; border-color: var(--primary); }
 
 /* ── FAQ ────────────────────────────────────────── */
 .mkt-faq-item { border-bottom: 1px solid var(--border); padding: 16px 0; }
 .mkt-faq-item h3 { margin: 0 0 8px; font-size: 15px; color: var(--text); }
 .mkt-faq-item p { margin: 0; }
 
-.mkt-placeholder { color: var(--accent2); font-weight: 700; }
+.mkt-placeholder { color: var(--accent); font-weight: 700; }
 
-/* ── FOOTER ─────────────────────────────────────── */
-.mkt-footer {
-  border-top: 1px solid var(--border);
-  padding: 28px 32px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 18px;
-  justify-content: space-between;
-  align-items: center;
-  color: var(--muted);
-  font-size: 13px;
-}
-.mkt-footer nav { display: flex; gap: 16px; flex-wrap: wrap; }
-.mkt-footer a { color: var(--muted); text-decoration: none; }
-.mkt-footer a:hover { color: var(--text); }
+/* ── ÖZELLİKLER anchor hedefi için sticky navbar altında boşluk ── */
+#ozellikler { scroll-margin-top: 84px; }

@@ -1,8 +1,10 @@
 'use client';
 
 import { useState } from 'react';
+import { CheckCircle2, Check, Unlock } from 'lucide-react';
 import { requestPremiumUpgrade } from '../account/actions';
 import { STANDARD_YEARLY_PRICE, formatTL } from '@/lib/engine/pricing';
+import Modal from '../../components/Modal';
 
 // Tetikleyen yere göre kısa gerekçe cümlesi — CTA'nın kendisi ve
 // yükseltme akışı hep aynı, sadece "neden burdasın" mesajı değişir.
@@ -33,14 +35,11 @@ export default function PremiumScreen({ reason, onClose }) {
   }
 
   return (
-    <div style={overlayStyle}>
-      <div style={cardStyle}>
-        <button onClick={onClose} style={closeBtnStyle} aria-label="Kapat">×</button>
-
+    <Modal onClose={onClose} labelledBy="premium-screen-title" maxWidth={420}>
         {sent ? (
           <div style={{ textAlign: 'center', padding: '20px 0' }}>
-            <div style={{ fontSize: 40, marginBottom: 12 }}>✓</div>
-            <h2 style={{ fontFamily: "'Bebas Neue', sans-serif", letterSpacing: 1 }}>Talebiniz alındı</h2>
+            <CheckCircle2 size={40} color="var(--success)" style={{ marginBottom: 12 }} />
+            <h2 id="premium-screen-title" style={{ fontFamily: 'var(--font-heading)', fontWeight: 800 }}>Talebiniz alındı</h2>
             <p style={{ color: 'var(--muted)', fontSize: 14 }}>
               Ekibimiz en kısa sürede sizinle iletişime geçip Premium hesabınızı aktif edecek.
             </p>
@@ -48,8 +47,8 @@ export default function PremiumScreen({ reason, onClose }) {
           </div>
         ) : (
           <>
-            <div style={{ fontSize: 40, textAlign: 'center', marginBottom: 8 }}>🔓</div>
-            <h2 style={{ fontFamily: "'Bebas Neue', sans-serif", letterSpacing: 1, textAlign: 'center', fontSize: 26 }}>
+            <div style={{ textAlign: 'center', marginBottom: 8 }}><Unlock size={36} color="var(--primary)" /></div>
+            <h2 id="premium-screen-title" style={{ fontFamily: 'var(--font-heading)', fontWeight: 800, textAlign: 'center', fontSize: 24 }}>
               Tüm dönemi görüntülemeye hazırsınız.
             </h2>
             <p style={{ textAlign: 'center', color: 'var(--muted)', fontSize: 14, marginTop: 4 }}>
@@ -63,13 +62,13 @@ export default function PremiumScreen({ reason, onClose }) {
               <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Premium üyelik ile:</div>
               <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'grid', gap: 6, fontSize: 13 }}>
                 {['Tüm dönem', 'Word çıktısı', 'PDF çıktısı', 'Yazdırma', 'Geçmiş kayıtlar', 'Güncellemeler', 'Öncelikli destek'].map((f) => (
-                  <li key={f}>✔ {f}</li>
+                  <li key={f} style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Check size={14} color="var(--success)" /> {f}</li>
                 ))}
               </ul>
             </div>
 
             <div style={{ textAlign: 'center', margin: '16px 0' }}>
-              <div style={{ fontSize: 24, fontFamily: "'Bebas Neue', sans-serif", color: 'var(--accent)' }}>
+              <div style={{ fontSize: 24, fontFamily: 'var(--font-heading)', fontWeight: 800, color: 'var(--primary)' }}>
                 {formatTL(STANDARD_YEARLY_PRICE)} <span style={{ fontSize: 13, color: 'var(--muted)', fontFamily: 'inherit' }}>/ yıl</span>
               </div>
             </div>
@@ -93,20 +92,6 @@ export default function PremiumScreen({ reason, onClose }) {
             </button>
           </>
         )}
-      </div>
-    </div>
+    </Modal>
   );
 }
-
-const overlayStyle = {
-  position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex',
-  alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16,
-};
-const cardStyle = {
-  position: 'relative', background: 'var(--surface)', border: '1px solid var(--border)',
-  borderRadius: 12, padding: 28, maxWidth: 420, width: '100%', maxHeight: '90vh', overflowY: 'auto',
-};
-const closeBtnStyle = {
-  position: 'absolute', top: 10, right: 10, background: 'none', border: 'none',
-  fontSize: 22, cursor: 'pointer', color: 'var(--muted)', lineHeight: 1,
-};

@@ -1,0 +1,80 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { AnimatePresence } from 'framer-motion';
+import Button from './Button';
+import LoginModal from './LoginModal';
+import Logo from './Logo';
+
+// app/page.jsx ve app/(marketing)/layout.jsx tarafından paylaşılan tek
+// header. Giriş modalının açık/kapalı durumu burada tutuluyor — iki
+// mount noktası da aynı bileşeni kullandığı için ayrı bir context'e
+// gerek yok.
+export default function Navbar() {
+  const [scrolled, setScrolled] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [loginOpen, setLoginOpen] = useState(false);
+
+  useEffect(() => {
+    function onScroll() {
+      setScrolled(window.scrollY > 8);
+    }
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
+  function openLogin() {
+    setMobileOpen(false);
+    setLoginOpen(true);
+  }
+
+  return (
+    <>
+      <header className={`navbar ${scrolled ? 'navbar-scrolled' : ''}`}>
+        <Link href="/" className="navbar-logo">
+          <Logo size={30} />
+          <span>OkulNöbet</span>
+        </Link>
+
+        <nav className="navbar-links">
+          <Link href="/fiyatlandirma">Fiyatlandırma</Link>
+          <Link href="/#ozellikler">Özellikler</Link>
+          <Link href="/sss">SSS</Link>
+        </nav>
+
+        <div className="navbar-actions">
+          <Button variant="ghost" onClick={openLogin}>Giriş Yap</Button>
+          <Button href="/signup" variant="primary">Ücretsiz Başla</Button>
+        </div>
+
+        <button
+          type="button"
+          className={`navbar-burger ${mobileOpen ? 'open' : ''}`}
+          aria-label={mobileOpen ? 'Menüyü kapat' : 'Menüyü aç'}
+          aria-expanded={mobileOpen}
+          onClick={() => setMobileOpen((v) => !v)}
+        >
+          <span />
+          <span />
+          <span />
+        </button>
+      </header>
+
+      {mobileOpen && (
+        <div className="navbar-mobile">
+          <Link href="/fiyatlandirma" onClick={() => setMobileOpen(false)}>Fiyatlandırma</Link>
+          <Link href="/#ozellikler" onClick={() => setMobileOpen(false)}>Özellikler</Link>
+          <Link href="/sss" onClick={() => setMobileOpen(false)}>SSS</Link>
+          <Button variant="outline" onClick={openLogin}>Giriş Yap</Button>
+          <Button href="/signup" variant="primary" onClick={() => setMobileOpen(false)}>Ücretsiz Başla</Button>
+        </div>
+      )}
+
+      <AnimatePresence>
+        {loginOpen && <LoginModal onClose={() => setLoginOpen(false)} />}
+      </AnimatePresence>
+    </>
+  );
+}

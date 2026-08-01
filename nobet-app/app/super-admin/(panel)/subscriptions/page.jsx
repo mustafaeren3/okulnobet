@@ -1,9 +1,12 @@
+import { CreditCard, Lightbulb } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
 import { requirePlatformAdmin, getPlatformSchools } from '@/lib/db/platformAdmin';
 import Link from 'next/link';
+import Badge from '../../../components/Badge';
 import '../../../(wizard)/dashboard/dashboard.css';
 
 const STATUS_LABELS = { active: 'Aktif', past_due: 'Ödeme Gecikti', expired: 'Süresi Doldu', cancelled: 'İptal Edildi', frozen: 'Dondurulmuş' };
+const STATUS_VARIANTS = { active: 'success', past_due: 'warning', expired: 'danger', cancelled: 'neutral', frozen: 'danger' };
 const PLAN_LABELS = { free: 'Ücretsiz', standard: 'Standart', enterprise: 'Kurumsal' };
 // Abonelik sağlığı açısından en acil durumlar üstte — bu sayfa "gözat"
 // değil "dikkat gerektirenleri gör" amaçlı (bkz. Okullar sayfası: arama/
@@ -22,8 +25,8 @@ export default async function SubscriptionsPage() {
   return (
     <div className="dash-root" style={{ minHeight: 'auto' }}>
       <div className="card">
-        <h3>💳 Abonelikler</h3>
-        <div className="info-box">Dikkat gerektiren durumlar (ödeme gecikti/süresi doldu/dondurulmuş) üstte listelenir. Değişiklik yapmak için okula tıkla.</div>
+        <h3><CreditCard size={17} /> Abonelikler</h3>
+        <div className="info-box"><Lightbulb size={13} /><span>Dikkat gerektiren durumlar (ödeme gecikti/süresi doldu/dondurulmuş) üstte listelenir. Değişiklik yapmak için okula tıkla.</span></div>
         <table className="distrib-table">
           <thead><tr><th>Okul</th><th>Plan</th><th>Durum</th><th>Ücretsiz Kota</th></tr></thead>
           <tbody>
@@ -31,7 +34,13 @@ export default async function SubscriptionsPage() {
               <tr key={s.school_id}>
                 <td style={{ textAlign: 'left' }}><Link href={`/super-admin/schools/${s.school_id}`} style={{ color: 'var(--accent)', textDecoration: 'none' }}>{s.school_name}</Link></td>
                 <td>{PLAN_LABELS[s.plan_type] || s.plan_type || '—'}</td>
-                <td>{STATUS_LABELS[s.subscription_status] || s.subscription_status || '—'}</td>
+                <td>
+                  {s.subscription_status ? (
+                    <Badge variant={STATUS_VARIANTS[s.subscription_status] || 'neutral'}>
+                      {STATUS_LABELS[s.subscription_status] || s.subscription_status}
+                    </Badge>
+                  ) : '—'}
+                </td>
                 <td>—</td>
               </tr>
             ))}

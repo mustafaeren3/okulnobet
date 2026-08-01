@@ -1,8 +1,10 @@
-export const metadata = { title: 'Sık Sorulan Sorular — Nöbet Sistemi' };
+import { SUPPORT_EMAIL } from '../../components/Footer';
+
+export const metadata = { title: 'Sık Sorulan Sorular' };
 
 const FAQS = [
   {
-    q: 'Nöbet Sistemi tam olarak ne yapıyor?',
+    q: 'OkulNöbet tam olarak ne yapıyor?',
     a: 'Okulundaki öğretmen ve nöbet bölgelerini tanımlıyorsun; sistem, belirlediğin kurallara (branş, gün kısıtı, çift nöbet vb.) uyarak ve adil bir rotasyonla otomatik nöbet programı üretiyor. Elle düzenleme ve kilitleme her zaman mümkün.',
   },
   {
@@ -27,7 +29,7 @@ const FAQS = [
   },
   {
     q: 'Teknik destek nasıl alırım?',
-    a: <span><span className="mkt-placeholder">[DOLDURULACAK: destek e-postası/telefon numarası]</span> üzerinden bize ulaşabilirsin.</span>,
+    a: <span><a href={`mailto:${SUPPORT_EMAIL}`} style={{ color: 'var(--primary-hover)' }}>{SUPPORT_EMAIL}</a> üzerinden bize ulaşabilirsin.</span>,
   },
 ];
 

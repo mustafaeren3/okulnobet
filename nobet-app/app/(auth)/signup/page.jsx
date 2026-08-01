@@ -2,8 +2,10 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { Eye, EyeOff } from 'lucide-react';
 import { startSignup, resendSignupCode, verifySignupCode, fetchSchoolsForDistrict } from './actions';
 import { MEB_PROVINCES, getDistrictsForProvince } from '@/lib/data/mebProvinceDistricts';
+import Logo from '../../components/Logo';
 import '../auth.css';
 
 const OKUL_DIGER_VALUE = '__DIGER__';
@@ -20,6 +22,7 @@ export default function SignupPage() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [resendMsg, setResendMsg] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
 
   const districts = useMemo(() => getDistrictsForProvince(fields.il), [fields.il]);
 
@@ -100,7 +103,10 @@ export default function SignupPage() {
   return (
     <div className="auth-root">
       <div className="auth-card" style={{ maxWidth: 460 }}>
-        <Link href="/" className="auth-logo">NÖBET SİSTEMİ</Link>
+        <Link href="/" className="auth-logo">
+          <Logo size={34} />
+          <span>OkulNöbet</span>
+        </Link>
         <div className="auth-subtitle">Okulunu ücretsiz kaydet, hemen programını oluştur</div>
         <h1>{phase === 'form' ? 'Okulunu Kaydet' : 'E-postanı Onayla'}</h1>
 
@@ -179,17 +185,29 @@ export default function SignupPage() {
               />
             </div>
             <div className="auth-field">
-              <label>Şifre</label>
-              <input
-                value={fields.password}
-                onChange={(e) => updateField('password', e.target.value)}
-                type="password"
-                placeholder="En az 6 karakter"
-                required
-                minLength={6}
-              />
+              <label htmlFor="signup-password">Şifre</label>
+              <div className="auth-password-wrap">
+                <input
+                  id="signup-password"
+                  value={fields.password}
+                  onChange={(e) => updateField('password', e.target.value)}
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder="En az 6 karakter"
+                  required
+                  minLength={6}
+                />
+                <button
+                  type="button"
+                  className="auth-password-toggle"
+                  aria-label={showPassword ? 'Şifreyi gizle' : 'Şifreyi göster'}
+                  aria-pressed={showPassword}
+                  onClick={() => setShowPassword((v) => !v)}
+                >
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
             </div>
-            <button type="submit" className="auth-btn auth-btn-primary" disabled={busy}>
+            <button type="submit" className="btn btn-primary" style={{ width: '100%' }} disabled={busy}>
               {busy ? 'Gönderiliyor...' : 'Kaydol'}
             </button>
           </form>
@@ -212,10 +230,10 @@ export default function SignupPage() {
                 style={{ textAlign: 'center', fontSize: 20, letterSpacing: 6 }}
               />
             </div>
-            <button type="submit" className="auth-btn auth-btn-primary" disabled={busy}>
+            <button type="submit" className="btn btn-primary" style={{ width: '100%' }} disabled={busy}>
               {busy ? 'Doğrulanıyor...' : 'Onayla ve Devam Et'}
             </button>
-            <button type="button" onClick={handleResend} className="auth-btn auth-btn-outline">
+            <button type="button" onClick={handleResend} className="btn btn-outline" style={{ width: '100%', marginTop: 10 }}>
               Kodu Tekrar Gönder
             </button>
             {resendMsg && <div className="auth-subtitle" style={{ marginTop: 10, marginBottom: 0 }}>{resendMsg}</div>}

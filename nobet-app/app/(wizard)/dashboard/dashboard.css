@@ -1,19 +1,10 @@
-@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600;700&display=swap');
+/* Renk/font tokenları artık app/globals.css'te (:root) tanımlı — bu dosya
+   yalnızca Dashboard'a özel yerleşim/bileşen kuralları içerir. Süper admin
+   panelinin çoğu sayfası da bu dosyayı import ediyor (bkz. plan §Context),
+   bu yüzden buradaki değişiklikler admin paneline de yansır. */
 
 .dash-root {
-  --bg: #0f1117;
-  --surface: #1a1d27;
-  --surface2: #22263a;
-  --border: #2e3350;
-  --accent: #4f7ef7;
-  --accent2: #f7c14f;
-  --danger: #f74f4f;
-  --success: #4ff7a0;
-  --text: #e8ecff;
-  --muted: #7a82a8;
-  --card-radius: 12px;
-
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-body);
   color: var(--text);
   min-height: 100vh;
 }
@@ -22,44 +13,38 @@
 
 /* ── HEADER ─────────────────────────────────────────────── */
 .dash-root header {
-  background: linear-gradient(135deg, #0f1117 0%, #1a1d27 100%);
+  background: var(--surface);
   border-bottom: 1px solid var(--border);
-  padding: 18px 32px;
+  padding: 16px 32px;
   display: flex;
   align-items: center;
   gap: 16px;
   position: sticky; top: 0; z-index: 100;
 }
 .dash-root header .logo {
-  font-family: 'Bebas Neue', sans-serif;
-  font-size: 26px;
-  letter-spacing: 3px;
-  background: linear-gradient(90deg, var(--accent), var(--accent2));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-}
-.dash-root header .badge {
-  background: var(--accent);
-  color: #fff;
-  font-size: 11px;
-  font-weight: 700;
-  padding: 3px 10px;
-  border-radius: 20px;
-  letter-spacing: 1px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--font-heading);
+  font-weight: 800;
+  font-size: 17px;
+  letter-spacing: 0.2px;
+  color: var(--text);
 }
 .dash-root header .school-name {
   margin-left: auto;
   font-size: 13px;
-  color: var(--muted);
+  color: var(--text-muted);
 }
 .dash-root header .logout-btn {
   background: none;
   border: 1px solid var(--border);
-  color: var(--muted);
-  border-radius: 8px;
+  color: var(--text-muted);
+  border-radius: var(--radius-sm);
   padding: 6px 14px;
   font-size: 12px;
   cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
 }
 .dash-root header .logout-btn:hover { color: var(--danger); border-color: var(--danger); }
 
@@ -71,19 +56,21 @@
   border-bottom: 1px solid var(--border);
 }
 .dash-root .tab-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
   background: none;
   border: none;
-  border-bottom: 3px solid transparent;
-  color: var(--muted);
-  font-family: 'DM Sans', sans-serif;
+  border-bottom: 2px solid transparent;
+  color: var(--text-muted);
+  font-family: var(--font-body);
   font-size: 14px;
   font-weight: 600;
   padding: 10px 20px;
   cursor: pointer;
-  transition: all .2s;
-  letter-spacing: .5px;
+  transition: color 0.15s, border-color 0.15s;
 }
-.dash-root .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+.dash-root .tab-btn.active { color: var(--primary); border-bottom-color: var(--primary); }
 .dash-root .tab-btn:hover:not(.active) { color: var(--text); }
 
 .dash-root .tab-content { display: none; padding: 28px 32px; }
@@ -91,18 +78,19 @@
 
 /* ── CARDS & GRIDS ───────────────────────────────────────── */
 .dash-root .card {
-  background: var(--surface);
+  background: var(--card);
   border: 1px solid var(--border);
-  border-radius: var(--card-radius);
+  border-radius: var(--radius-lg);
   padding: 24px;
   margin-bottom: 20px;
 }
 .dash-root .card h3 {
-  font-family: 'Bebas Neue', sans-serif;
-  font-size: 18px;
-  letter-spacing: 2px;
-  color: var(--accent2);
-  margin-bottom: 16px;
+  font-family: var(--font-heading);
+  font-weight: 800;
+  font-size: 16px;
+  letter-spacing: 0;
+  color: var(--text);
+  margin: 0 0 16px;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -110,48 +98,72 @@
 .dash-root .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
 @media(max-width:900px){ .dash-root .two-col { grid-template-columns:1fr; } }
 
+/* Dar ekranlarda geniş tabloların taştığı kartlar için — JSX'e wrapper
+   eklemeden `:has()` ile kart düzeyinde yatay scroll sağlanır. */
+.dash-root .card:has(.distrib-table) {
+  overflow-x: auto;
+}
+
 /* ── FORMS ───────────────────────────────────────────────── */
-.dash-root label { display: block; font-size: 12px; font-weight: 600; color: var(--muted); letter-spacing: .8px; margin-bottom: 6px; text-transform: uppercase; }
+.dash-root label { display: block; font-size: 12px; font-weight: 600; color: var(--text-muted); letter-spacing: .2px; margin-bottom: 6px; }
 .dash-root input, .dash-root select {
   width: 100%;
-  background: var(--surface2);
+  background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   color: var(--text);
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-body);
   font-size: 14px;
   padding: 10px 14px;
   outline: none;
-  transition: border-color .2s;
+  transition: border-color .15s, box-shadow .15s;
 }
-.dash-root input:focus, .dash-root select:focus { border-color: var(--accent); }
+.dash-root input:focus, .dash-root select:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(79, 124, 255, 0.22);
+}
 .dash-root .form-row { display: grid; grid-template-columns: 1fr 1fr auto; gap: 10px; align-items: end; margin-bottom: 10px; }
 .dash-root .form-row-3 { display: grid; grid-template-columns: 2fr 1.4fr 1fr auto; gap: 10px; align-items: end; margin-bottom: 10px; }
 
 /* ── BUTTONS ─────────────────────────────────────────────── */
 .dash-root .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   border: none;
-  border-radius: 8px;
-  font-family: 'DM Sans', sans-serif;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-body);
   font-size: 13px;
   font-weight: 700;
   cursor: pointer;
   padding: 10px 18px;
-  letter-spacing: .5px;
-  transition: all .15s;
+  letter-spacing: 0;
+  transition: box-shadow .15s, background .15s, color .15s;
   white-space: nowrap;
 }
-.dash-root .btn-primary { background: var(--accent); color: #fff; }
-.dash-root .btn-primary:hover { background: #3a65d9; transform: translateY(-1px); }
-.dash-root .btn-danger { background: #2a1a1a; color: var(--danger); border: 1px solid var(--danger); }
-.dash-root .btn-danger:hover { background: var(--danger); color: #fff; }
-.dash-root .btn-success { background: var(--success); color: #0f2e1a; }
-.dash-root .btn-success:hover { background: #36d984; }
-.dash-root .btn-outline { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
-.dash-root .btn-outline:hover { background: var(--accent); color: #fff; }
-.dash-root .btn-lg { padding: 14px 28px; font-size: 15px; border-radius: 10px; }
-.dash-root .btn-xl { padding: 16px 36px; font-size: 16px; border-radius: 12px; width: 100%; margin-top: 8px; }
-.dash-root .btn:disabled { opacity: .5; cursor: not-allowed; transform: none !important; }
+.dash-root .btn-primary { background: var(--primary); color: #fff; }
+.dash-root .btn-primary:hover:not(:disabled) { background: var(--primary-hover); }
+.dash-root .btn-danger { background: rgba(239, 68, 68, 0.12); color: var(--danger); border: 1px solid rgba(239, 68, 68, 0.4); }
+.dash-root .btn-danger:hover:not(:disabled) { background: var(--danger); color: #fff; }
+.dash-root .btn-success { background: var(--success); color: #06281a; }
+.dash-root .btn-success:hover:not(:disabled) { filter: brightness(1.08); }
+.dash-root .btn-outline { background: transparent; color: var(--primary); border: 1px solid var(--primary); }
+.dash-root .btn-outline:hover:not(:disabled) { background: rgba(79, 124, 255, 0.1); }
+.dash-root .btn-lg { padding: 14px 28px; font-size: 15px; border-radius: var(--radius-md); }
+.dash-root .btn-xl { padding: 16px 36px; font-size: 16px; border-radius: var(--radius-md); width: 100%; margin-top: 8px; }
+.dash-root .btn:disabled { opacity: .5; cursor: not-allowed; }
+
+/* ── PILL (person-tag / holiday-tag-benzeri / wdcheck / month-tab-btn ortak
+   temeli — JSX değişmeden, yalnızca ortak seçici gruplaması ile) ───────── */
+.dash-root .person-tag,
+.dash-root .wdcheck,
+.dash-root .month-tab-btn {
+  border-radius: var(--radius-lg);
+  font-weight: 700;
+  white-space: nowrap;
+  transition: border-color .15s, background .15s, color .15s;
+}
 
 /* ── PERSON LIST ─────────────────────────────────────────── */
 .dash-root .person-list { display: flex; flex-direction: column; gap: 6px; max-height: 420px; overflow-y: auto; padding-right: 4px; }
@@ -160,27 +172,27 @@
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
-  background: var(--surface2);
+  background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   padding: 8px 12px;
-  transition: border-color .2s;
+  transition: border-color .15s;
 }
-.dash-root .person-item:hover { border-color: var(--accent); }
+.dash-root .person-item:hover { border-color: var(--primary); }
 .dash-root .person-color { width: 14px; height: 14px; border-radius: 50%; flex-shrink: 0; border: 2px solid rgba(255,255,255,.2); }
 .dash-root .person-name { flex: 1; font-size: 13px; font-weight: 600; min-width: 140px; }
-.dash-root .person-tag { font-size: 10px; padding: 2px 8px; border-radius: 12px; font-weight: 700; white-space: nowrap; }
-.dash-root .tag-new { background: #0a2a1a; color: var(--success); border: 1px solid var(--success); }
-.dash-root .person-del { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 16px; line-height: 1; padding: 2px 6px; border-radius: 4px; }
-.dash-root .person-del:hover { color: var(--danger); background: #2a1a1a; }
+.dash-root .person-tag { font-size: 10px; padding: 2px 8px; }
+.dash-root .tag-new { background: rgba(22, 199, 132, 0.14); color: var(--success); border: 1px solid rgba(22, 199, 132, 0.4); }
+.dash-root .person-del { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 16px; line-height: 1; padding: 2px 6px; border-radius: 4px; }
+.dash-root .person-del:hover { color: var(--danger); background: rgba(239, 68, 68, 0.1); }
 
 /* ── HOLIDAYS ────────────────────────────────────────────── */
 .dash-root .holiday-list { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 .dash-root .holiday-tag {
-  background: #2a1a1a;
+  background: rgba(239, 68, 68, 0.1);
   color: var(--danger);
-  border: 1px solid #4a2020;
-  border-radius: 20px;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: var(--radius-lg);
   padding: 4px 12px;
   font-size: 12px;
   font-weight: 600;
@@ -190,45 +202,48 @@
 }
 .dash-root .holiday-tag button { background: none; border: none; color: var(--danger); cursor: pointer; font-size: 14px; line-height: 1; padding: 0 2px; }
 
-/* ── SCHEDULE TABLE ──────────────────────────────────────── */
-.dash-root .schedule-wrapper { overflow-x: auto; }
-.dash-root .schedule-table {
+/* ── DATA TABLE (schedule-table + distrib-table ortak temeli) ──────────── */
+.dash-root .schedule-table,
+.dash-root .distrib-table {
   width: 100%;
   border-collapse: collapse;
   font-size: 12px;
 }
-.dash-root .schedule-table th {
-  background: var(--surface2);
+.dash-root .schedule-table th,
+.dash-root .distrib-table th {
+  background: var(--surface);
   border: 1px solid var(--border);
-  padding: 10px 8px;
-  text-align: center;
-  font-family: 'Bebas Neue', sans-serif;
-  font-size: 13px;
-  letter-spacing: 1px;
-  color: var(--accent2);
-  white-space: nowrap;
-}
-.dash-root .schedule-table td {
-  border: 1px solid var(--border);
-  padding: 6px;
-  text-align: center;
-  font-weight: 600;
+  padding: 8px 10px;
+  text-align: left;
+  color: var(--text-muted);
   font-size: 11px;
-  min-width: 140px;
-  vertical-align: top;
+  font-weight: 700;
+  letter-spacing: .3px;
+  text-transform: uppercase;
 }
-.dash-root .td-date { font-size: 11px; color: var(--muted); white-space: nowrap; background: var(--surface2) !important; vertical-align: middle; }
-.dash-root .td-day { font-size: 11px; font-weight: 700; background: var(--surface2) !important; white-space: nowrap; vertical-align: middle; }
-.dash-root .td-empty { background: var(--surface) !important; }
+.dash-root .schedule-table td,
+.dash-root .distrib-table td {
+  border: 1px solid var(--border);
+  padding: 8px 10px;
+}
+
+/* ── SCHEDULE TABLE (özel yerleşim farkları) ────────────────────────────── */
+.dash-root .schedule-wrapper { overflow-x: auto; }
+.dash-root .schedule-table th { text-align: center; white-space: nowrap; }
+.dash-root .schedule-table td { text-align: center; font-weight: 600; font-size: 11px; min-width: 140px; vertical-align: top; }
+.dash-root .td-date { font-size: 11px; color: var(--text-muted); white-space: nowrap; background: var(--surface) !important; vertical-align: middle; }
+.dash-root .td-day { font-size: 11px; font-weight: 700; background: var(--surface) !important; white-space: nowrap; vertical-align: middle; }
+.dash-root .td-empty { background: var(--card) !important; }
 .dash-root .week-header td {
-  background: linear-gradient(90deg, #1a1d27, #22263a) !important;
-  color: var(--accent);
-  font-family: 'Bebas Neue', sans-serif;
-  font-size: 14px;
-  letter-spacing: 2px;
+  background: var(--surface) !important;
+  color: var(--primary);
+  font-family: var(--font-heading);
+  font-weight: 800;
+  font-size: 13px;
+  letter-spacing: .3px;
   text-align: left;
   padding-left: 16px;
-  border-top: 2px solid var(--accent);
+  border-left: 3px solid var(--primary);
 }
 
 /* Nöbet hücresi içeriği: renkli kişi rozetleri + elle ekleme kontrolü. */
@@ -237,7 +252,7 @@
   align-items: center;
   justify-content: center;
   gap: 4px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   padding: 3px 6px;
   margin-bottom: 3px;
   font-size: 11px;
@@ -256,79 +271,78 @@
 .dash-root .cell-add-btn {
   background: none;
   border: 1px dashed var(--border);
-  color: var(--muted);
-  border-radius: 6px;
+  color: var(--text-muted);
+  border-radius: var(--radius-sm);
   width: 100%;
   padding: 3px 0;
   cursor: pointer;
   font-size: 13px;
 }
-.dash-root .cell-add-btn:hover { border-color: var(--accent); color: var(--accent); }
+.dash-root .cell-add-btn:hover { border-color: var(--primary); color: var(--primary); }
 .dash-root .cell-add-row { display: flex; flex-direction: column; gap: 4px; }
 .dash-root .cell-add-row select { padding: 4px 6px; font-size: 11px; }
-.dash-root .cell-add-row button { border: 1px solid var(--border); background: var(--surface2); color: var(--text); border-radius: 4px; cursor: pointer; font-size: 11px; padding: 2px 6px; }
+.dash-root .cell-add-row button { border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 4px; cursor: pointer; font-size: 11px; padding: 2px 6px; }
 
 /* ── STATS ───────────────────────────────────────────────── */
 .dash-root .stats-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; margin-bottom: 20px; }
 .dash-root .stat-card {
-  background: var(--surface2);
+  background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   padding: 14px 16px;
   display: flex;
   align-items: center;
   gap: 12px;
 }
-.dash-root .stat-icon { font-size: 24px; }
-.dash-root .stat-num { font-family: 'Bebas Neue', sans-serif; font-size: 28px; line-height: 1; color: var(--accent); }
-.dash-root .stat-lbl { font-size: 11px; color: var(--muted); font-weight: 600; letter-spacing: .5px; text-transform: uppercase; }
+.dash-root .stat-icon { font-size: 22px; display: flex; }
+.dash-root .stat-num { font-family: var(--font-heading); font-weight: 800; font-size: 26px; line-height: 1; color: var(--primary); }
+.dash-root .stat-lbl { font-size: 11px; color: var(--text-muted); font-weight: 600; letter-spacing: .3px; text-transform: uppercase; }
 
-/* ── DISTRIB TABLE ───────────────────────────────────────── */
-.dash-root .distrib-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-.dash-root .distrib-table th { background: var(--surface2); border: 1px solid var(--border); padding: 8px 10px; text-align: left; color: var(--muted); font-size: 11px; letter-spacing: .5px; text-transform: uppercase; }
-.dash-root .distrib-table td { border: 1px solid var(--border); padding: 8px 10px; }
+/* ── DISTRIB TABLE (özel yerleşim farkları) ─────────────────────────────── */
 .dash-root .distrib-bar-wrap { background: var(--border); border-radius: 4px; height: 6px; width: 100px; display: inline-block; vertical-align: middle; }
-.dash-root .distrib-bar { height: 6px; border-radius: 4px; background: var(--accent); }
+.dash-root .distrib-bar { height: 6px; border-radius: 4px; background: var(--primary); }
 
 /* ── EXPORT ──────────────────────────────────────────────── */
 .dash-root .export-section { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 20px; }
 
 /* ── TOAST ───────────────────────────────────────────────── */
-.dash-root #toast {
-  position: fixed; bottom: 28px; right: 28px;
-  border-radius: 10px; padding: 12px 20px;
-  font-weight: 700; font-size: 14px;
-  transform: translateY(80px); opacity: 0;
-  transition: all .3s; z-index: 9999;
-  pointer-events: none;
-}
-.dash-root #toast.show { transform: translateY(0); opacity: 1; }
-
 .dash-root .sep { height: 1px; background: var(--border); margin: 20px 0; }
-.dash-root .info-box { background: #0d1a2e; border: 1px solid #1e3a5f; border-radius: 8px; padding: 10px 14px; font-size: 12px; color: #7ab3f5; margin-bottom: 14px; }
-.dash-root .wdcheck { display:flex;align-items:center;gap:4px;background:var(--surface2);border:1px solid var(--border);padding:6px 12px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;user-select:none;transition:border-color .2s; }
-.dash-root .wdcheck.active { border-color:var(--accent);color:var(--accent); }
+.dash-root .info-box {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  background: rgba(79, 124, 255, 0.08);
+  border: 1px solid rgba(79, 124, 255, 0.25);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 14px;
+}
+.dash-root .info-box svg { flex-shrink: 0; margin-top: 2px; color: var(--primary); }
+.dash-root .wdcheck { display:flex;align-items:center;gap:4px;background:var(--surface);border:1px solid var(--border);padding:6px 12px;cursor:pointer;font-size:13px;user-select:none; }
+.dash-root .wdcheck.active { border-color:var(--primary);color:var(--primary); }
 
 /* ── AY SEKMELERİ (Faz 9: feature gating — ücretsiz planda ilk ay
    dışındakiler kilitli) ─────────────────────────────────────── */
 .dash-root .month-tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
 .dash-root .month-tab-btn {
-  background: var(--surface2); border: 1px solid var(--border); color: var(--muted);
-  border-radius: 20px; padding: 7px 16px; font-size: 13px; font-weight: 600;
-  cursor: pointer; transition: all .2s;
+  background: var(--surface); border: 1px solid var(--border); color: var(--text-muted);
+  padding: 7px 16px; font-size: 13px;
+  cursor: pointer;
 }
-.dash-root .month-tab-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.dash-root .month-tab-btn.active { background: var(--primary); border-color: var(--primary); color: #fff; }
 .dash-root .month-tab-btn.locked { opacity: .7; }
-.dash-root .month-tab-btn:hover:not(.active) { color: var(--text); border-color: var(--accent); }
+.dash-root .month-tab-btn:hover:not(.active) { color: var(--text); border-color: var(--primary); }
 
 /* ── YAZDIRMA (Faz 9: sadece nöbet tablosu basılır) ──────────── */
 @media print {
   .dash-root header, .dash-root .tabs, .dash-root .month-tabs,
-  .dash-root .stats-grid, .dash-root .export-section, .dash-root #toast {
+  .dash-root .stats-grid, .dash-root .export-section, .toast {
     display: none !important;
   }
   .dash-root .tab-content { display: block !important; padding: 0; }
   .dash-root .tab-content:not(.active) { display: none !important; }
   .dash-root .schedule-wrapper.printable-schedule { overflow: visible; }
 }
-.dash-root .wdcheck input { accent-color:var(--accent); width: auto; }
+.dash-root .wdcheck input { accent-color:var(--primary); width: auto; }

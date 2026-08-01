@@ -1,3 +1,4 @@
+import { ScrollText } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
 import { requirePlatformAdmin, getPlatformAuditLogs } from '@/lib/db/platformAdmin';
 import Link from 'next/link';
@@ -19,7 +20,7 @@ export default async function AuditLogsPage() {
   return (
     <div className="dash-root" style={{ minHeight: 'auto' }}>
       <div className="card">
-        <h3>📜 İşlem Geçmişi (son 200 kayıt)</h3>
+        <h3><ScrollText size={17} /> İşlem Geçmişi (son 200 kayıt)</h3>
         {logs.length === 0 ? (
           <div style={{ color: 'var(--muted)', fontSize: 13 }}>Henüz kayıt yok.</div>
         ) : (

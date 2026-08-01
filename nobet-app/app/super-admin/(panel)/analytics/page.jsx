@@ -1,3 +1,4 @@
+import { Users, BarChart3 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
 import { requirePlatformAdmin, getPlatformSchools } from '@/lib/db/platformAdmin';
 import '../../../(wizard)/dashboard/dashboard.css';
@@ -25,8 +26,8 @@ export default async function AnalyticsPage() {
   return (
     <div className="dash-root" style={{ minHeight: 'auto' }}>
       <div className="stats-grid">
-        <div className="stat-card"><span className="stat-icon">👥</span><div><div className="stat-num">{totalTeachers}</div><div className="stat-lbl">Toplam Öğretmen (tüm okullar)</div></div></div>
-        <div className="stat-card"><span className="stat-icon">📊</span><div><div className="stat-num">{avgTeachersPerSchool}</div><div className="stat-lbl">Okul Başına Ort. Öğretmen</div></div></div>
+        <div className="stat-card"><span className="stat-icon"><Users size={20} /></span><div><div className="stat-num">{totalTeachers}</div><div className="stat-lbl">Toplam Öğretmen (tüm okullar)</div></div></div>
+        <div className="stat-card"><span className="stat-icon"><BarChart3 size={20} /></span><div><div className="stat-num">{avgTeachersPerSchool}</div><div className="stat-lbl">Okul Başına Ort. Öğretmen</div></div></div>
       </div>
 
       <div className="two-col">

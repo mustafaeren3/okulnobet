@@ -2,10 +2,14 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { School } from 'lucide-react';
 import { fetchSchoolsPage } from '../../actions/schools';
+import Badge from '../../../components/Badge';
+import Pagination from '../../../components/Pagination';
 import '../../../(wizard)/dashboard/dashboard.css';
 
 const STATUS_LABELS = { active: 'Aktif', past_due: 'Ödeme Gecikti', expired: 'Süresi Doldu', cancelled: 'İptal Edildi', frozen: 'Dondurulmuş' };
+const STATUS_VARIANTS = { active: 'success', past_due: 'warning', expired: 'danger', cancelled: 'neutral', frozen: 'danger' };
 const PLAN_LABELS = { free: 'Ücretsiz', standard: 'Standart', enterprise: 'Kurumsal' };
 const PAGE_SIZE = 25;
 
@@ -49,7 +53,7 @@ export default function SchoolsListPage() {
   return (
     <div className="dash-root" style={{ minHeight: 'auto' }}>
       <div className="card">
-        <h3>🏫 Okullar</h3>
+        <h3><School size={17} /> Okullar</h3>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
           <input placeholder="Okul adı ara..." value={filters.search} onChange={(e) => updateFilter({ search: e.target.value })} style={{ flex: '1 1 200px' }} />
           <input placeholder="İl" value={filters.city} onChange={(e) => updateFilter({ city: e.target.value })} style={{ width: 120 }} />
@@ -93,7 +97,13 @@ export default function SchoolsListPage() {
                       <div style={{ fontSize: 11, color: 'var(--muted)' }}>{s.city} / {s.district}</div>
                     </td>
                     <td>{PLAN_LABELS[s.plan_type] || s.plan_type || '—'}</td>
-                    <td>{STATUS_LABELS[s.subscription_status] || s.subscription_status || '—'}</td>
+                    <td>
+                      {s.subscription_status ? (
+                        <Badge variant={STATUS_VARIANTS[s.subscription_status] || 'neutral'}>
+                          {STATUS_LABELS[s.subscription_status] || s.subscription_status}
+                        </Badge>
+                      ) : '—'}
+                    </td>
                     <td>{s.teacher_count}</td>
                     <td>{s.last_generated_at ? formatDate(s.last_generated_at) : '—'}</td>
                     <td>{formatDate(s.created_at)}</td>
@@ -104,13 +114,13 @@ export default function SchoolsListPage() {
           </table>
         </div>
 
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 16, fontSize: 13, color: 'var(--muted)' }}>
-          <span>{totalCount} okul, sayfa {filters.page} / {totalPages}</span>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button className="btn btn-outline" style={{ width: 'auto', padding: '4px 12px' }} disabled={filters.page <= 1} onClick={() => setFilters((f) => ({ ...f, page: f.page - 1 }))}>← Önceki</button>
-            <button className="btn btn-outline" style={{ width: 'auto', padding: '4px 12px' }} disabled={filters.page >= totalPages} onClick={() => setFilters((f) => ({ ...f, page: f.page + 1 }))}>Sonraki →</button>
-          </div>
-        </div>
+        <Pagination
+          page={filters.page}
+          totalPages={totalPages}
+          totalCount={totalCount}
+          itemLabel="okul"
+          onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
+        />
       </div>
     </div>
   );

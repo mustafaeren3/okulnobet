@@ -2,7 +2,9 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { CheckCircle2, Mail } from 'lucide-react';
 import { submitEnterpriseLead } from './actions';
+import { CONTACT_EMAIL } from '../../components/Footer';
 
 export default function KurumsalPage() {
   const [fields, setFields] = useState({ schoolName: '', contactName: '', phone: '', email: '', teacherCountEstimate: '', note: '' });
@@ -29,12 +31,19 @@ export default function KurumsalPage() {
       <div className="mkt-hero" style={{ padding: '20px 0 8px' }}>
         <h1>Kurumsal Paket</h1>
         <p>Birden fazla okulu veya ilçe/il müdürlüğünü yönetiyorsan, ihtiyacına özel bir teklif hazırlayalım.</p>
+        <p style={{ marginTop: 8 }}>
+          Formu doldurmak istemiyorsan doğrudan yazabilirsin: {' '}
+          <a href={`mailto:${CONTACT_EMAIL}`} style={{ color: 'var(--primary-hover)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            <Mail size={14} /> {CONTACT_EMAIL}
+          </a>
+        </p>
       </div>
 
       <div className="mkt-section" style={{ maxWidth: 520, margin: '0 auto' }}>
         {sent ? (
           <div className="mkt-card" style={{ textAlign: 'center' }}>
-            <h4>Talebiniz alındı ✓</h4>
+            <CheckCircle2 size={32} color="var(--success)" style={{ marginBottom: 8 }} />
+            <h4>Talebiniz alındı</h4>
             <p>Ekibimiz en kısa sürede sizinle iletişime geçecek.</p>
             <Link href="/" className="mkt-btn mkt-btn-outline">Ana Sayfaya Dön</Link>
           </div>
@@ -64,7 +73,7 @@ export default function KurumsalPage() {
               <label>Not</label>
               <textarea rows={3} value={fields.note} onChange={(e) => update('note', e.target.value)} />
             </div>
-            {error && <div style={{ color: '#f74f4f', fontSize: 13 }}>{error}</div>}
+            {error && <div style={{ color: 'var(--danger)', fontSize: 13 }}>{error}</div>}
             <button className="mkt-btn mkt-btn-primary" type="submit" disabled={busy}>{busy ? 'Gönderiliyor...' : 'Teklif Al'}</button>
           </form>
         )}

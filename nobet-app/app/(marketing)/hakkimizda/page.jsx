@@ -1,4 +1,6 @@
-export const metadata = { title: 'Hakkımızda — Nöbet Sistemi' };
+import { CONTACT_EMAIL } from '../../components/Footer';
+
+export const metadata = { title: 'Hakkımızda' };
 
 export default function HakkimizdaPage() {
   return (
@@ -10,12 +12,12 @@ export default function HakkimizdaPage() {
       <div className="mkt-section">
         <h2>Kimiz?</h2>
         <p>
-          Nöbet Sistemi, <span className="mkt-placeholder">[DOLDURULACAK: şirket/şahıs unvanı]</span> tarafından
+          OkulNöbet, <span className="mkt-placeholder">[DOLDURULACAK: şirket/şahıs unvanı]</span> tarafından
           geliştirilen, Türkiye'deki okullar için nöbet/görev programlarını otomatik ve adil şekilde oluşturan
           bir SaaS (hizmet olarak yazılım) ürünüdür.
         </p>
         <p>
-          İletişim: <span className="mkt-placeholder">[DOLDURULACAK: iletişim e-postası]</span> ·{' '}
+          İletişim: <a href={`mailto:${CONTACT_EMAIL}`} style={{ color: 'var(--primary-hover)' }}>{CONTACT_EMAIL}</a> ·{' '}
           Adres: <span className="mkt-placeholder">[DOLDURULACAK: şirket adresi]</span>
         </p>
       </div>

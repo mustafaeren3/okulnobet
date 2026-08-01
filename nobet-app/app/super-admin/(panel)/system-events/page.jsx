@@ -1,3 +1,4 @@
+import { Shield, Lightbulb } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
 import { requirePlatformAdmin } from '@/lib/db/platformAdmin';
 import { getPlatformSystemEvents } from '@/lib/db/systemEvents';
@@ -25,10 +26,13 @@ export default async function SystemEventsPage() {
   return (
     <div className="dash-root" style={{ minHeight: 'auto' }}>
       <div className="card">
-        <h3>🛡️ Sistem Olayları (son 200)</h3>
+        <h3><Shield size={17} /> Sistem Olayları (son 200)</h3>
         <div className="info-box">
-          Başarısız giriş denemeleri, MFA hataları ve rate-limit tetiklenmeleri — kişisel veri
-          (parola vb.) hiçbir zaman kaydedilmez, sadece e-posta/kullanıcı kimliği ve olay tipi.
+          <Lightbulb size={13} />
+          <span>
+            Başarısız giriş denemeleri, MFA hataları ve rate-limit tetiklenmeleri — kişisel veri
+            (parola vb.) hiçbir zaman kaydedilmez, sadece e-posta/kullanıcı kimliği ve olay tipi.
+          </span>
         </div>
         {events.length === 0 ? (
           <div style={{ color: 'var(--muted)', fontSize: 13 }}>Henüz olay yok.</div>

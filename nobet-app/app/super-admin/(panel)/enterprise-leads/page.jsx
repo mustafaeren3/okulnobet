@@ -1,3 +1,4 @@
+import { Building2 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
 import { requirePlatformAdmin, getPlatformEnterpriseLeads } from '@/lib/db/platformAdmin';
 import '../../../(wizard)/dashboard/dashboard.css';
@@ -16,7 +17,7 @@ export default async function EnterpriseLeadsPage() {
   return (
     <div className="dash-root" style={{ minHeight: 'auto' }}>
       <div className="card">
-        <h3>🏢 Kurumsal Talepler ({leads.length})</h3>
+        <h3><Building2 size={17} /> Kurumsal Talepler ({leads.length})</h3>
         {leads.length === 0 ? (
           <div style={{ color: 'var(--muted)', fontSize: 13 }}>Henüz talep yok.</div>
         ) : (

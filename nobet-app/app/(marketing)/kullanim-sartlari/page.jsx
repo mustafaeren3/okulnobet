@@ -1,4 +1,6 @@
-export const metadata = { title: 'Kullanım Şartları — Nöbet Sistemi' };
+import { CONTACT_EMAIL } from '../../components/Footer';
+
+export const metadata = { title: 'Kullanım Şartları' };
 
 export default function KullanimSartlariPage() {
   return (
@@ -12,7 +14,7 @@ export default function KullanimSartlariPage() {
         <h2>1. Taraflar ve Kabul</h2>
         <p>
           Bu şartlar, <span className="mkt-placeholder">[DOLDURULACAK: şirket/şahıs unvanı]</span> ("Hizmet Sağlayıcı")
-          tarafından sunulan Nöbet Sistemi hizmetini ("Hizmet") kullanan okul idarecisi ("Kullanıcı") arasındaki
+          tarafından sunulan OkulNöbet hizmetini ("Hizmet") kullanan okul idarecisi ("Kullanıcı") arasındaki
           ilişkiyi düzenler. Hizmete kaydolarak bu şartları kabul etmiş sayılırsınız.
         </p>
       </div>
@@ -76,7 +78,7 @@ export default function KullanimSartlariPage() {
       <div className="mkt-section">
         <h2>8. İletişim</h2>
         <p>
-          Sorularınız için: <span className="mkt-placeholder">[DOLDURULACAK: iletişim e-postası]</span>
+          Sorularınız için: <a href={`mailto:${CONTACT_EMAIL}`} style={{ color: 'var(--primary-hover)' }}>{CONTACT_EMAIL}</a>
         </p>
       </div>
     </main>

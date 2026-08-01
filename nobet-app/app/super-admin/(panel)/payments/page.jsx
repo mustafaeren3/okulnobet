@@ -1,3 +1,4 @@
+import { Wallet, Receipt, CreditCard, Lightbulb } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
 import { requirePlatformAdmin, getPlatformPayments, getPlatformSchools } from '@/lib/db/platformAdmin';
 import { formatTL } from '@/lib/engine/pricing';
@@ -26,12 +27,12 @@ export default async function PaymentsPage() {
   return (
     <div className="dash-root" style={{ minHeight: 'auto' }}>
       <div className="stats-grid">
-        <div className="stat-card"><span className="stat-icon">💰</span><div><div className="stat-num">{formatTL(total)}</div><div className="stat-lbl">Toplam Tahsilat (gerçek)</div></div></div>
-        <div className="stat-card"><span className="stat-icon">🧾</span><div><div className="stat-num">{payments.length}</div><div className="stat-lbl">Kayıtlı Ödeme</div></div></div>
+        <div className="stat-card"><span className="stat-icon"><Wallet size={20} /></span><div><div className="stat-num">{formatTL(total)}</div><div className="stat-lbl">Toplam Tahsilat (gerçek)</div></div></div>
+        <div className="stat-card"><span className="stat-icon"><Receipt size={20} /></span><div><div className="stat-num">{payments.length}</div><div className="stat-lbl">Kayıtlı Ödeme</div></div></div>
       </div>
       <div className="card">
-        <h3>💳 Ödemeler</h3>
-        <div className="info-box">Yeni ödeme kaydı okul detay sayfasındaki "Ödemeler" sekmesinden eklenir.</div>
+        <h3><CreditCard size={17} /> Ödemeler</h3>
+        <div className="info-box"><Lightbulb size={13} /><span>Yeni ödeme kaydı okul detay sayfasındaki &quot;Ödemeler&quot; sekmesinden eklenir.</span></div>
         {payments.length === 0 ? (
           <div style={{ color: 'var(--muted)', fontSize: 13 }}>Henüz ödeme kaydı yok.</div>
         ) : (

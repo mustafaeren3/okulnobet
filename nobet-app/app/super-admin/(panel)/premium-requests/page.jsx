@@ -1,3 +1,4 @@
+import { ArrowUp } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
 import { requirePlatformAdmin, getPlatformPurchaseIntents } from '@/lib/db/platformAdmin';
 import Link from 'next/link';
@@ -17,7 +18,7 @@ export default async function PremiumRequestsPage() {
   return (
     <div className="dash-root" style={{ minHeight: 'auto' }}>
       <div className="card">
-        <h3>⬆️ Premium Talepleri ({intents.length})</h3>
+        <h3><ArrowUp size={17} /> Premium Talepleri ({intents.length})</h3>
         {intents.length === 0 ? (
           <div style={{ color: 'var(--muted)', fontSize: 13 }}>Henüz talep yok.</div>
         ) : (

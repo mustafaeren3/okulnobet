@@ -1,4 +1,6 @@
-export const metadata = { title: 'Gizlilik Politikası — Nöbet Sistemi' };
+import { CONTACT_EMAIL } from '../../components/Footer';
+
+export const metadata = { title: 'Gizlilik Politikası' };
 
 export default function GizlilikPage() {
   return (
@@ -12,7 +14,8 @@ export default function GizlilikPage() {
         <h2>1. Veri Sorumlusu</h2>
         <p>
           6698 sayılı Kişisel Verilerin Korunması Kanunu ("KVKK") kapsamında veri sorumlusu:{' '}
-          <span className="mkt-placeholder">[DOLDURULACAK: şirket/şahıs unvanı, adres, e-posta]</span>.
+          <span className="mkt-placeholder">[DOLDURULACAK: şirket/şahıs unvanı, adres]</span>,{' '}
+          <a href={`mailto:${CONTACT_EMAIL}`} style={{ color: 'var(--primary-hover)' }}>{CONTACT_EMAIL}</a>.
         </p>
       </div>
 
@@ -66,7 +69,7 @@ export default function GizlilikPage() {
         <p>
           KVKK'nın 11. maddesi uyarınca kişisel verilerinizin işlenip işlenmediğini öğrenme, işlenmişse buna
           ilişkin bilgi talep etme, düzeltilmesini veya silinmesini isteme haklarına sahipsiniz. Taleplerinizi{' '}
-          <span className="mkt-placeholder">[DOLDURULACAK: KVKK başvuru e-postası]</span> adresine iletebilirsiniz.
+          <a href={`mailto:${CONTACT_EMAIL}`} style={{ color: 'var(--primary-hover)' }}>{CONTACT_EMAIL}</a> adresine iletebilirsiniz.
         </p>
       </div>
 

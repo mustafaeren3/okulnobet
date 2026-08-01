@@ -7,6 +7,8 @@ import { submitSchoolNote } from '../../../actions/schools';
 import { submitPayment } from '../../../actions/payments';
 import { formatTL } from '@/lib/engine/pricing';
 import ConfirmActionModal from '../../../components/ConfirmActionModal';
+import Toast from '../../../../components/Toast';
+import { useToast } from '../../../../components/useToast';
 import '../../../../(wizard)/dashboard/dashboard.css';
 
 const STATUS_LABELS = { active: 'Aktif', past_due: 'Ödeme Gecikti', expired: 'Süresi Doldu', cancelled: 'İptal Edildi', frozen: 'Dondurulmuş' };
@@ -25,7 +27,7 @@ function formatDateTime(dateStr) {
 
 export default function SchoolDetailClient({ schoolId, detail, initialAuditLogs }) {
   const [activeTab, setActiveTab] = useState('genel');
-  const [toast, setToast] = useState('');
+  const { toast, showToast } = useToast();
   const [busy, setBusy] = useState(false);
   const [modal, setModal] = useState(null); // 'freeze' | 'reopen' | 'cancel' | 'quota' | 'payment' | null
   const [auditLogs] = useState(initialAuditLogs || []);
@@ -44,11 +46,6 @@ export default function SchoolDetailClient({ schoolId, detail, initialAuditLogs 
   const [newQuota, setNewQuota] = useState(sub.free_generation_quota ?? 1);
   const [paymentDraft, setPaymentDraft] = useState({ amount: '', method: '', note: '' });
 
-  function showToast(msg) {
-    setToast(msg);
-    setTimeout(() => setToast(''), 3000);
-  }
-
   async function handleSaveSubscription() {
     setBusy(true);
     // Plan/durum sabit alan güncellemesi hâlâ "reason zorunlu" DB kuralına
@@ -62,17 +59,17 @@ export default function SchoolDetailClient({ schoolId, detail, initialAuditLogs 
       reason: 'Admin panelinden manuel güncelleme',
     });
     setBusy(false);
-    if (res.error) { showToast(res.error); return; }
+    if (res.error) { showToast(res.error, true); return; }
     showToast('Abonelik güncellendi ✓');
   }
 
   async function handleExtend() {
     const days = parseInt(extendDays, 10);
-    if (!Number.isInteger(days) || days <= 0) { showToast('Geçerli bir gün sayısı girin.'); return; }
+    if (!Number.isInteger(days) || days <= 0) { showToast('Geçerli bir gün sayısı girin.', true); return; }
     setBusy(true);
     const res = await extendTrial(schoolId, days, 'Admin panelinden dönem uzatma');
     setBusy(false);
-    if (res.error) { showToast(res.error); return; }
+    if (res.error) { showToast(res.error, true); return; }
     setExtendDays('');
     showToast(`${days} gün eklendi ✓`);
   }
@@ -82,7 +79,7 @@ export default function SchoolDetailClient({ schoolId, detail, initialAuditLogs 
     const res = await freeze(schoolId, reason);
     setBusy(false);
     setModal(null);
-    if (res.error) { showToast(res.error); return; }
+    if (res.error) { showToast(res.error, true); return; }
     showToast('Hesap donduruldu');
   }
 
@@ -91,7 +88,7 @@ export default function SchoolDetailClient({ schoolId, detail, initialAuditLogs 
     const res = await reopen(schoolId, reason);
     setBusy(false);
     setModal(null);
-    if (res.error) { showToast(res.error); return; }
+    if (res.error) { showToast(res.error, true); return; }
     showToast('Hesap yeniden açıldı');
   }
 
@@ -100,7 +97,7 @@ export default function SchoolDetailClient({ schoolId, detail, initialAuditLogs 
     const res = await cancel(schoolId, reason);
     setBusy(false);
     setModal(null);
-    if (res.error) { showToast(res.error); return; }
+    if (res.error) { showToast(res.error, true); return; }
     showToast('Abonelik iptal edildi');
   }
 
@@ -109,18 +106,18 @@ export default function SchoolDetailClient({ schoolId, detail, initialAuditLogs 
     const res = await adjustQuota(schoolId, parseInt(newQuota, 10), reason);
     setBusy(false);
     setModal(null);
-    if (res.error) { showToast(res.error); return; }
+    if (res.error) { showToast(res.error, true); return; }
     showToast('Kota güncellendi ✓');
   }
 
   async function handlePaymentConfirm(reason) {
     const amount = parseFloat(paymentDraft.amount);
-    if (!amount || amount <= 0) { showToast('Geçerli bir tutar girin.'); return; }
+    if (!amount || amount <= 0) { showToast('Geçerli bir tutar girin.', true); return; }
     setBusy(true);
     const res = await submitPayment({ schoolId, amount, method: paymentDraft.method, note: paymentDraft.note, reason });
     setBusy(false);
     setModal(null);
-    if (res.error) { showToast(res.error); return; }
+    if (res.error) { showToast(res.error, true); return; }
     setPayments((p) => [{ amount, method: paymentDraft.method, note: paymentDraft.note, created_at: new Date().toISOString() }, ...p]);
     setPaymentDraft({ amount: '', method: '', note: '' });
     showToast('Ödeme kaydedildi ✓');
@@ -131,7 +128,7 @@ export default function SchoolDetailClient({ schoolId, detail, initialAuditLogs 
     setBusy(true);
     const res = await submitSchoolNote(schoolId, noteText.trim());
     setBusy(false);
-    if (res.error) { showToast(res.error); return; }
+    if (res.error) { showToast(res.error, true); return; }
     setNotes((n) => [{ note: noteText.trim(), created_at: new Date().toISOString(), admin_email: 'sen' }, ...n]);
     setNoteText('');
   }
@@ -315,11 +312,7 @@ export default function SchoolDetailClient({ schoolId, detail, initialAuditLogs 
         </div>
       )}
 
-      {toast && (
-        <div style={{ position: 'fixed', bottom: 24, right: 24, background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 8, padding: '12px 18px', fontSize: 13, zIndex: 1000 }}>
-          {toast}
-        </div>
-      )}
+      <Toast toast={toast} />
 
       {modal === 'freeze' && (
         <ConfirmActionModal
