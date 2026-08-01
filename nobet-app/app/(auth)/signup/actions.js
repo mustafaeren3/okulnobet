@@ -25,7 +25,29 @@ export async function fetchSchoolsForDistrict(il, ilce) {
 
 export async function startSignup({ email, password, okulAdi, il, ilce, phone }) {
   const supabase = createClient();
-  const { data, error } = await supabase.auth.signUp({ email, password });
+
+  // GEÇİCİ TEŞHİS LOGLARI — signup akışı doğrulaması için, kalıcı değil.
+  // result.data.session ham haliyle BİLEREK loglanmıyor: access_token/
+  // refresh_token içeriyor, bunu Vercel log altyapısına düz metin yazmak
+  // o session'ı ele geçirmeye yeten bir kimlik bilgisini sızdırmak demek
+  // olurdu. Aynı teşhis değerini taşıyan, token içermeyen bir özet basılıyor.
+  console.log('START SIGNUP');
+  console.log({ email });
+  console.log('BEFORE SIGNUP');
+
+  const result = await supabase.auth.signUp({ email, password });
+
+  console.log('AFTER SIGNUP');
+  console.log({
+    hasError: !!result.error,
+    errorMessage: result.error?.message,
+    sessionExists: !!result.data?.session,
+    userId: result.data?.user?.id,
+    userConfirmed: result.data?.user?.email_confirmed_at,
+    identities: result.data?.user?.identities,
+  });
+
+  const { data, error } = result;
   if (error) return { error: error.message };
 
   if (data.session) {
