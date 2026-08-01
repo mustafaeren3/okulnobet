@@ -17,6 +17,23 @@ async function requireAdminMembership(supabase) {
   if (!isAdmin) redirect('/dashboard');
 }
 
+// Güvenlik denetimi bulgusu: cancelEnrollment/verifyEnrollment/
+// startChallenge/verifyChallenge hepsi CLIENT'IN gönderdiği factorId'yi
+// doğrudan Supabase'e geçiriyordu. Supabase'in kendi MFA endpoint'leri
+// zaten çağıranın JWT'sindeki auth.uid()'e göre kapsıyor (başkasının
+// faktörünü hiçbir zaman döndürmez/kabul etmez) — ama buna körü körüne
+// güvenmek yerine, "başka bir kullanıcının secret/QR'ı asla
+// görüntülenemez" garantisini KENDİ kodumuzda da doğrulanabilir hale
+// getiriyoruz (savunma amaçlı ikinci katman, tek ekstra listFactors()
+// çağrısı maliyetinde).
+async function assertOwnFactor(supabase, factorId) {
+  const { data, error } = await supabase.auth.mfa.listFactors();
+  if (error) return { error: error.message };
+  const owns = (data?.totp || []).some((f) => f.id === factorId);
+  if (!owns) return { error: 'Geçersiz MFA faktörü.' };
+  return null;
+}
+
 export async function startEnrollment() {
   const supabase = createClient();
   await requireAdminMembership(supabase);
@@ -29,6 +46,8 @@ export async function startEnrollment() {
 export async function cancelEnrollment(factorId) {
   const supabase = createClient();
   await requireAdminMembership(supabase);
+  const ownError = await assertOwnFactor(supabase, factorId);
+  if (ownError) return ownError;
   // Doğrulanmamış (unverified) bir faktörün unenroll'u aal2 istemez —
   // kullanıcı QR'ı kapatıp yeniden başlatmak isterse eski deneme temizlenir.
   await supabase.auth.mfa.unenroll({ factorId });
@@ -38,6 +57,8 @@ export async function cancelEnrollment(factorId) {
 export async function verifyEnrollment({ factorId, code }) {
   const supabase = createClient();
   await requireAdminMembership(supabase);
+  const ownError = await assertOwnFactor(supabase, factorId);
+  if (ownError) return ownError;
 
   const { data: { user } } = await supabase.auth.getUser();
   const allowed = await checkRateLimit(supabase, `mfa:${user.id}`, 8, 300).catch(() => true);
@@ -61,6 +82,8 @@ export async function verifyEnrollment({ factorId, code }) {
 export async function startChallenge(factorId) {
   const supabase = createClient();
   await requireAdminMembership(supabase);
+  const ownError = await assertOwnFactor(supabase, factorId);
+  if (ownError) return ownError;
 
   const { data, error } = await supabase.auth.mfa.challenge({ factorId });
   if (error) return { error: error.message };
@@ -70,6 +93,8 @@ export async function startChallenge(factorId) {
 export async function verifyChallenge({ factorId, challengeId, code }) {
   const supabase = createClient();
   await requireAdminMembership(supabase);
+  const ownError = await assertOwnFactor(supabase, factorId);
+  if (ownError) return ownError;
 
   const { data: { user } } = await supabase.auth.getUser();
   const allowed = await checkRateLimit(supabase, `mfa:${user.id}`, 8, 300).catch(() => true);
