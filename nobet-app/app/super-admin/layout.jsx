@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { isPlatformAdmin } from '@/lib/db/platformAdmin';
+import { logSecurityEvent } from '@/lib/db/systemEvents';
 
 // TÜM /super-admin/* rotalarının (panel VE /mfa) ortak dış katmanı —
 // SADECE "giriş yapmış + platform_admins üyesi" kontrolü burada.
@@ -15,8 +16,16 @@ export default async function SuperAdminRootLayout({ children }) {
   let isAdmin = false;
   try {
     isAdmin = await isPlatformAdmin(supabase);
-  } catch {
+  } catch (err) {
+    // Önceden burada hata sessizce yutulup false'a düşülüyordu — "gerçekten
+    // yetkisiz" ile "RPC arızalandı" birbirinden ayırt edilemiyordu, kilitli
+    // kalan bir admin için hiçbir iz kalmıyordu. Artık en azından
+    // system_events'e (giriş yapmış herkes yazabilir, bkz. 0026) düşüyor.
     isAdmin = false;
+    await logSecurityEvent(supabase, 'super_admin_check_failed', {
+      user_id: user.id,
+      error: err?.message || String(err),
+    });
   }
   if (!isAdmin) redirect('/dashboard');
 
