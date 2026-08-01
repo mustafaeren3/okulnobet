@@ -2,7 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
-import { getSchoolsForDistrict } from '@/lib/data/mebSchoolLookup';
+import { searchSchools } from '@/lib/data/schoolSearch';
 import { mapAuthErrorMessage, sanitizeDbErrorMessage } from '@/lib/errors';
 
 // İki aşamalı kayıt: (1) hesap oluştur — e-postaya 6 haneli OTP gider,
@@ -20,19 +20,27 @@ import { mapAuthErrorMessage, sanitizeDbErrorMessage } from '@/lib/errors';
 // ayarının kodun varsaydığıyla çelişmesidir — Supabase dashboard'undan
 // doğrulanmalı, kod bunu kendi başına düzeltemez.
 
-export async function fetchSchoolsForDistrict(il, ilce) {
-  if (!il || !ilce) return [];
-  return getSchoolsForDistrict(il, ilce);
+// Tek akıllı arama kutusu — il/ilçe/okul kademeli seçimin yerini aldı
+// (bkz. lib/data/schoolSearch.js: Türkçe karakter duyarsız + yazım hatası
+// toleranslı, öncelik sıralı arama). limit sabit tutuluyor — sanallaştırma
+// zaten görünen 20 satırı render ediyor, sunucudan daha fazla sonuç
+// istemek gereksiz veri taşımaktan başka bir şey değil.
+export async function searchSchoolsAction(query) {
+  if (!query || !query.trim()) return [];
+  return searchSchools(query, { limit: 200 });
 }
 
-// Kullanıcıya artık "okul türü" SORULMUYOR (isim zaten "... İlkokulu/
+// Kullanıcıya "okul türü" SORULMUYOR (isim zaten "... İlkokulu/
 // Ortaokulu/Lisesi" içeriyor, ikinci kez sormak gereksiz tekrar). Tür,
-// MEB listesinden seçilen okulun KENDİ türünden sessizce çıkarılıyor;
-// listede olmayan (elle yazılan "Özel Okul"/"Diğer") okullar için MEB
-// kaynaklı bir tür sinyali yok, bu yüzden genel 'diger' değerine düşülür.
+// arama sonucundan seçilen okulun KENDİ türünden çıkarılıyor — client'ın
+// gönderdiği türe körü körüne güvenmek yerine (o veri zaten server'dan
+// geldi ama savunma amaçlı) aynı isim+il+ilçe kombinasyonu arama
+// indeksinde GERÇEKTEN var mı diye tekrar doğrulanıyor. Listede olmayan
+// (elle yazılan "Özel Okul"/"Diğer") okullar için MEB kaynaklı bir tür
+// sinyali yok, genel 'diger' değerine düşülür.
 async function inferSchoolType(il, ilce, okulAdi) {
-  const options = await getSchoolsForDistrict(il, ilce);
-  const match = options.find((s) => s.name === okulAdi);
+  const matches = await searchSchools(okulAdi, { limit: 500 });
+  const match = matches.find((s) => s.name === okulAdi && s.province === il && s.district === ilce);
   return match?.type || 'diger';
 }
 

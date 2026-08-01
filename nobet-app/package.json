@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "node scripts/validateMebData.js && next build",
+    "validate:meb-data": "node scripts/validateMebData.js",
     "start": "next start",
     "test": "vitest run",
     "test:e2e": "playwright test"
@@ -12,6 +13,7 @@
   "dependencies": {
     "@supabase/ssr": "^0.5.1",
     "@supabase/supabase-js": "^2.45.4",
+    "@tanstack/react-virtual": "^3.14.9",
     "framer-motion": "^12.43.0",
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.8",

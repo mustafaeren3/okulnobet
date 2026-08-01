@@ -1,69 +1,67 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { Eye, EyeOff } from 'lucide-react';
-import { startSignup, resendSignupCode, verifySignupCode, fetchSchoolsForDistrict } from './actions';
+import { startSignup, resendSignupCode, verifySignupCode, searchSchoolsAction } from './actions';
 import { MEB_PROVINCES, getDistrictsForProvince } from '@/lib/data/mebProvinceDistricts';
+import SchoolSearchField from './SchoolSearchField';
 import Logo from '../../components/Logo';
 import '../auth.css';
-
-const OKUL_DIGER_VALUE = '__DIGER__';
-const OKUL_OZEL_VALUE = '__OZEL__';
 
 export default function SignupPage() {
   // phase 'form': bilgiler toplanır. phase 'code': e-postaya giden 6
   // haneli kod girilir, doğrulanınca okul oluşturulur.
   const [phase, setPhase] = useState('form');
-  const [fields, setFields] = useState({ fullName: '', il: '', ilce: '', okulSecim: '', okulAdiManual: '', email: '', password: '' });
-  const [schoolOptions, setSchoolOptions] = useState([]);
-  const [schoolsLoading, setSchoolsLoading] = useState(false);
+  const [fields, setFields] = useState({ fullName: '', email: '', password: '' });
+  const [selectedSchool, setSelectedSchool] = useState(null);
+  // Arama listesinde okulunu bulamayan kullanıcılar için tek geri düşüş —
+  // il/ilçe burada BİLEREK serbest metin değil, MEB'in kendi il/ilçe
+  // listesinden seçiliyor (schoolSearch.js'in aynı temiz veri kaynağı),
+  // aksi halde tam da düzelttiğimiz duplicate/yazım sorununu manuel
+  // girişten geri açmış oluruz.
+  const [manualMode, setManualMode] = useState(false);
+  const [manualIl, setManualIl] = useState('');
+  const [manualIlce, setManualIlce] = useState('');
+  const [manualOkulAdi, setManualOkulAdi] = useState('');
+  const manualDistricts = useMemo(() => getDistrictsForProvince(manualIl), [manualIl]);
+
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [resendMsg, setResendMsg] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
-  const districts = useMemo(() => getDistrictsForProvince(fields.il), [fields.il]);
-
-  useEffect(() => {
-    if (!fields.il || !fields.ilce) { setSchoolOptions([]); return; }
-    let cancelled = false;
-    setSchoolsLoading(true);
-    fetchSchoolsForDistrict(fields.il, fields.ilce).then((list) => {
-      if (!cancelled) { setSchoolOptions(list); setSchoolsLoading(false); }
-    });
-    return () => { cancelled = true; };
-  }, [fields.il, fields.ilce]);
+  // SchoolSearchField'a stabil bir referans geçiyoruz (useCallback) —
+  // aksi halde her render'da yeni bir fonksiyon, arama kutusunun kendi
+  // memoizasyonunu (ResultRow) boşa çıkarırdı.
+  const runSearch = useCallback((q) => searchSchoolsAction(q), []);
 
   function updateField(name, value) {
     setFields((f) => ({ ...f, [name]: value }));
   }
 
-  function handleProvinceChange(value) {
-    // İl değişince eski ilçe/okul artık geçersiz olabilir — sıfırlanır.
-    setFields((f) => ({ ...f, il: value, ilce: '', okulSecim: '', okulAdiManual: '' }));
+  function handleManualEntry() {
+    setManualMode(true);
+    setSelectedSchool(null);
   }
 
-  function handleDistrictChange(value) {
-    setFields((f) => ({ ...f, ilce: value, okulSecim: '', okulAdiManual: '' }));
-  }
-
-  const isManualEntry = fields.okulSecim === OKUL_DIGER_VALUE || fields.okulSecim === OKUL_OZEL_VALUE;
-  const okulAdiFinal = isManualEntry ? fields.okulAdiManual.trim() : fields.okulSecim;
+  const okulAdiFinal = manualMode ? manualOkulAdi.trim() : selectedSchool?.name || '';
+  const il = manualMode ? manualIl : selectedSchool?.province || '';
+  const ilce = manualMode ? manualIlce : selectedSchool?.district || '';
 
   async function handleStartSignup(e) {
     e.preventDefault();
     setError('');
-    if (!okulAdiFinal) { setError('Okul adını seçin veya yazın.'); return; }
+    if (!okulAdiFinal || !il || !ilce) { setError('Okulunu seç veya elle gir.'); return; }
     setBusy(true);
     const res = await startSignup({
       fullName: fields.fullName.trim(),
       email: fields.email,
       password: fields.password,
       okulAdi: okulAdiFinal,
-      il: fields.il,
-      ilce: fields.ilce,
+      il,
+      ilce,
     });
     setBusy(false);
     if (res?.error) { setError(res.error); return; }
@@ -80,8 +78,8 @@ export default function SignupPage() {
       email: fields.email,
       code,
       okulAdi: okulAdiFinal,
-      il: fields.il,
-      ilce: fields.ilce,
+      il,
+      ilce,
     });
     setBusy(false);
     if (res?.error) setError(res.error);
@@ -111,60 +109,43 @@ export default function SignupPage() {
               <input value={fields.fullName} onChange={(e) => updateField('fullName', e.target.value)} placeholder="Ayşe Yılmaz" required />
             </div>
 
-            <div className="auth-row">
-              <div className="auth-field">
-                <label>İl</label>
-                <select value={fields.il} onChange={(e) => handleProvinceChange(e.target.value)} required>
-                  <option value="" disabled>Seçiniz</option>
-                  {MEB_PROVINCES.map((p) => (
-                    <option key={p} value={p}>{p}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="auth-field">
-                <label>İlçe</label>
-                <select value={fields.ilce} onChange={(e) => handleDistrictChange(e.target.value)} required disabled={!fields.il}>
-                  <option value="" disabled>{fields.il ? 'Seçiniz' : 'Önce il seçin'}</option>
-                  {districts.map((d) => (
-                    <option key={d} value={d}>{d}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div className="auth-field">
-              <label>Okul Adı</label>
-              <select
-                value={fields.okulSecim}
-                onChange={(e) => updateField('okulSecim', e.target.value)}
-                required
-                disabled={!fields.ilce || schoolsLoading}
-              >
-                <option value="" disabled>
-                  {!fields.ilce ? 'Önce il ve ilçe seçin' : schoolsLoading ? 'Okullar yükleniyor...' : 'Seçiniz'}
-                </option>
-                {schoolOptions.map((s) => (
-                  <option key={s.name} value={s.name}>{s.name}</option>
-                ))}
-                {fields.ilce && !schoolsLoading && (
-                  <>
-                    <option value={OKUL_OZEL_VALUE}>(Özel Okul) — listede yok, kendim yazacağım</option>
-                    <option value={OKUL_DIGER_VALUE}>Diğer — okulumu listede bulamadım</option>
-                  </>
-                )}
-              </select>
-            </div>
-
-            {isManualEntry && (
-              <div className="auth-field">
-                <label>{fields.okulSecim === OKUL_OZEL_VALUE ? 'Özel Okulunuzun Adı' : 'Okulunuzun Adı'}</label>
-                <input
-                  value={fields.okulAdiManual}
-                  onChange={(e) => updateField('okulAdiManual', e.target.value)}
-                  placeholder="Okul adını yazın"
-                  required
-                />
-              </div>
+            {!manualMode ? (
+              <SchoolSearchField searchAction={runSearch} onSelect={setSelectedSchool} onManualEntry={handleManualEntry} />
+            ) : (
+              <>
+                <div className="auth-field">
+                  <label>Okul Adı</label>
+                  <input value={manualOkulAdi} onChange={(e) => setManualOkulAdi(e.target.value)} placeholder="Okul adını yazın" required />
+                </div>
+                <div className="auth-row">
+                  <div className="auth-field">
+                    <label>İl</label>
+                    <select value={manualIl} onChange={(e) => { setManualIl(e.target.value); setManualIlce(''); }} required>
+                      <option value="" disabled>Seçiniz</option>
+                      {MEB_PROVINCES.map((p) => (
+                        <option key={p} value={p}>{p}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="auth-field">
+                    <label>İlçe</label>
+                    <select value={manualIlce} onChange={(e) => setManualIlce(e.target.value)} required disabled={!manualIl}>
+                      <option value="" disabled>{manualIl ? 'Seçiniz' : 'Önce il seçin'}</option>
+                      {manualDistricts.map((d) => (
+                        <option key={d} value={d}>{d}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="auth-subtitle"
+                  style={{ background: 'none', border: 'none', textDecoration: 'underline', cursor: 'pointer', padding: 0, marginBottom: 14 }}
+                  onClick={() => { setManualMode(false); setManualOkulAdi(''); setManualIl(''); setManualIlce(''); }}
+                >
+                  Aramaya geri dön
+                </button>
+              </>
             )}
 
             <div className="auth-field">

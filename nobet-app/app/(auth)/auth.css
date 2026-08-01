@@ -1,5 +1,17 @@
 /* Renk/font tokenları artık app/globals.css'te (:root) tanımlı. */
 
+/* Okul akıllı arama kutusundaki yükleniyor ikonu (SchoolSearchField.jsx). */
+@keyframes auth-spin {
+  to { transform: translateY(-50%) rotate(360deg); }
+}
+.spin {
+  animation: auth-spin 0.8s linear infinite;
+}
+
+.school-search-row:hover {
+  background: var(--surface2);
+}
+
 .auth-root {
   min-height: 100vh;
   display: flex;
