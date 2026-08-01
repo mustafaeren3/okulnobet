@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { Repeat2, Scale, Flag, Printer, ShieldCheck, Zap, Building2 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
+import { isPlatformAdmin } from '@/lib/db/platformAdmin';
 import { STANDARD_YEARLY_PRICE, formatTL } from '@/lib/engine/pricing';
 import Navbar from './components/Navbar';
 import Footer, { CONTACT_EMAIL } from './components/Footer';
@@ -62,7 +63,15 @@ const FAQS = [
 export default async function Home() {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (user) redirect('/dashboard');
+  if (user) {
+    // Platform admin hiçbir koşulda /dashboard'a düşmemeli (o rota okul
+    // sahibi kullanıcılar için — süper admin'in bağlı bir okulu yok,
+    // "Henüz bir okula bağlı değilsin" ekranıyla karşılaşırdı). Tek
+    // kaynak: platform_admins/platform_is_admin() (bkz. lib/db/platformAdmin.js) —
+    // aynı kontrol app/(auth)/login/actions.js ve dashboard/page.jsx'te de kullanılıyor.
+    const isAdmin = await isPlatformAdmin(supabase).catch(() => false);
+    redirect(isAdmin ? '/super-admin' : '/dashboard');
+  }
 
   return (
     <div className="mkt-root">

@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation';
 import { checkRateLimit } from '@/lib/db/rateLimit';
 import { logSecurityEvent } from '@/lib/db/systemEvents';
 import { mapAuthErrorMessage } from '@/lib/errors';
+import { isPlatformAdmin } from '@/lib/db/platformAdmin';
 
 // Brute-force koruması: aynı e-posta için 5 dakikada en fazla 5 deneme
 // (bkz. 0026_rate_limiting_and_events.sql check_rate_limit — Postgres
@@ -27,5 +28,12 @@ export async function login(formData) {
     await logSecurityEvent(supabase, 'login_failed', { email });
     return { error: mapAuthErrorMessage(error.message) };
   }
-  redirect('/dashboard');
+
+  // KRİTİK: bu satır önceden HER zaman '/dashboard'a gidiyordu — platform_admins
+  // üyesi (süper admin) bir okula hiç bağlı olmadığı için orada "Henüz bir
+  // okula bağlı değilsin" ekranıyla karşılaşıyordu. Tek kaynak: isPlatformAdmin()
+  // (bkz. lib/db/platformAdmin.js) — aynı kontrol app/page.jsx ve
+  // dashboard/page.jsx'te de kullanılıyor, dağınık "if (owner)" YOK.
+  const isAdmin = await isPlatformAdmin(supabase).catch(() => false);
+  redirect(isAdmin ? '/super-admin' : '/dashboard');
 }
