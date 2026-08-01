@@ -1,0 +1,8 @@
+/* SADECE /super-admin rotasında import edilir (bkz. layout.jsx) — Next.js
+   App Router her route'un CSS'ini ayrı chunk'a böldüğü için, bu dosyanın
+   @tailwind base (reset/preflight) katmanı SADECE super-admin sayfalarını
+   ziyaret eden kullanıcıya yüklenir; dashboard/signup/landing rotaları bu
+   dosyayı hiç görmez, hiç etkilenmez. */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;

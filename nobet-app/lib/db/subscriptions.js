@@ -8,27 +8,7 @@
 import { isPremium } from '@/lib/engine/access';
 import { getSubscriptionStatus } from '@/lib/engine/subscription';
 import { isDevEnvironment } from '@/lib/env';
-
-// Geliştirme ortamı kolaylığı: `next dev` çalışırken her okul premium
-// (standard/active) gibi davranır — ay kilidi, export/paylaşım/geçmiş,
-// üretim kotası hepsi açılır. TÜM özellik kapıları aboneliği bu
-// fonksiyondan (veya bunun sonucunu taşıyan prop'lardan) okuduğu için
-// tek nokta yeterli. Production build'de NODE_ENV='production' olduğu
-// için bu yol derlense bile hiç çalışmaz; vitest (NODE_ENV='test')
-// gerçek kuralları test etmeye devam eder. Gerçek satırın üzerine
-// overlay yapılır (satır hiç yoksa sentetik) — DB'ye hiçbir şey yazılmaz.
-function devPremiumOverlay(subscription) {
-  return {
-    school_id: null,
-    free_generation_quota: 999,
-    free_generation_used: 0,
-    ...(subscription || {}),
-    status: 'active',
-    plan_type: 'standard',
-    current_period_end: null,
-    _devOverlay: true,
-  };
-}
+import { applyUnlimitedOverlay } from '@/lib/engine/policy';
 
 export async function getSubscriptionForSchool(supabase, schoolId) {
   const { data, error } = await supabase
@@ -37,7 +17,18 @@ export async function getSubscriptionForSchool(supabase, schoolId) {
     .eq('school_id', schoolId)
     .maybeSingle();
   if (error) throw new Error(error.message);
-  if (isDevEnvironment()) return devPremiumOverlay(data);
+
+  // Muafiyet TEK noktadan uygulanıyor (bkz. lib/engine/policy.js) — iki
+  // ayrı sebep, aynı overlay: (1) `next dev` kolaylığı, (2) oturum sahibi
+  // platform_admins üyesi (süper admin) — "test yaparken hiçbir limit
+  // istemiyorum" isteği. platform_is_admin() zaten var olan, RLS'i
+  // bypass eden SECURITY DEFINER fonksiyon (bkz. 0016_super_admin.sql);
+  // burada YENİDEN bir yetki kontrolü icat edilmiyor.
+  if (isDevEnvironment()) return applyUnlimitedOverlay(data);
+
+  const { data: isAdmin } = await supabase.rpc('platform_is_admin');
+  if (isAdmin === true) return applyUnlimitedOverlay(data);
+
   return data;
 }
 

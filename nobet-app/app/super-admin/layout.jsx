@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { isPlatformAdmin } from '@/lib/db/platformAdmin';
 import { logSecurityEvent } from '@/lib/db/systemEvents';
+import './tailwind.css';
 
 // TÜM /super-admin/* rotalarının (panel VE /mfa) ortak dış katmanı —
 // SADECE "giriş yapmış + platform_admins üyesi" kontrolü burada.

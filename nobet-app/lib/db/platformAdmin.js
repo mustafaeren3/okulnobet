@@ -142,6 +142,12 @@ export async function getGenerationSuccessRate(supabase) {
   return callRpc(supabase, 'platform_generation_success_rate'); // number | null (hiç üretim yoksa)
 }
 
+// Süper admin panel v2 — özet kartlar + grafik verisi (bkz.
+// 0031_platform_dashboard_stats.sql). Tek jsonb, tek round-trip.
+export async function getPlatformDashboardStats(supabase) {
+  return callRpc(supabase, 'platform_dashboard_stats');
+}
+
 // Faz D — sunucu taraflı sayfalama/filtreleme (bkz. 0023_schools_pagination.sql).
 // Dönüş: her satırda total_count (window function) — istemci sayfa
 // sayısını buradan hesaplar, ayrı bir count sorgusu atmaz.
