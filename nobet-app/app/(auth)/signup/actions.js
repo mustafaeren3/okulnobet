@@ -25,7 +25,18 @@ export async function fetchSchoolsForDistrict(il, ilce) {
   return getSchoolsForDistrict(il, ilce);
 }
 
-export async function startSignup({ fullName, email, password, okulAdi, il, ilce, schoolType }) {
+// Kullanıcıya artık "okul türü" SORULMUYOR (isim zaten "... İlkokulu/
+// Ortaokulu/Lisesi" içeriyor, ikinci kez sormak gereksiz tekrar). Tür,
+// MEB listesinden seçilen okulun KENDİ türünden sessizce çıkarılıyor;
+// listede olmayan (elle yazılan "Özel Okul"/"Diğer") okullar için MEB
+// kaynaklı bir tür sinyali yok, bu yüzden genel 'diger' değerine düşülür.
+async function inferSchoolType(il, ilce, okulAdi) {
+  const options = await getSchoolsForDistrict(il, ilce);
+  const match = options.find((s) => s.name === okulAdi);
+  return match?.type || 'diger';
+}
+
+export async function startSignup({ fullName, email, password, okulAdi, il, ilce }) {
   const supabase = createClient();
   const { data, error } = await supabase.auth.signUp({
     email,
@@ -58,12 +69,13 @@ export async function resendSignupCode(email) {
   return { ok: true };
 }
 
-export async function verifySignupCode({ email, code, okulAdi, il, ilce, schoolType }) {
+export async function verifySignupCode({ email, code, okulAdi, il, ilce }) {
   const supabase = createClient();
 
   const { error: verifyError } = await supabase.auth.verifyOtp({ email, token: code, type: 'signup' });
   if (verifyError) return { error: mapAuthErrorMessage(verifyError.message) };
 
+  const schoolType = await inferSchoolType(il, ilce, okulAdi);
   const { error: rpcError } = await supabase.rpc('register_school', {
     p_name: okulAdi,
     p_city: il,

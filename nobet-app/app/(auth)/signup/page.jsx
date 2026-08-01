@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { Eye, EyeOff } from 'lucide-react';
 import { startSignup, resendSignupCode, verifySignupCode, fetchSchoolsForDistrict } from './actions';
 import { MEB_PROVINCES, getDistrictsForProvince } from '@/lib/data/mebProvinceDistricts';
-import { SCHOOL_TYPE_LABELS } from '@/lib/data/schoolTypes';
 import Logo from '../../components/Logo';
 import '../auth.css';
 
@@ -16,7 +15,7 @@ export default function SignupPage() {
   // phase 'form': bilgiler toplanır. phase 'code': e-postaya giden 6
   // haneli kod girilir, doğrulanınca okul oluşturulur.
   const [phase, setPhase] = useState('form');
-  const [fields, setFields] = useState({ fullName: '', il: '', ilce: '', okulSecim: '', okulAdiManual: '', schoolType: '', email: '', password: '' });
+  const [fields, setFields] = useState({ fullName: '', il: '', ilce: '', okulSecim: '', okulAdiManual: '', email: '', password: '' });
   const [schoolOptions, setSchoolOptions] = useState([]);
   const [schoolsLoading, setSchoolsLoading] = useState(false);
   const [code, setCode] = useState('');
@@ -57,7 +56,6 @@ export default function SignupPage() {
     e.preventDefault();
     setError('');
     if (!okulAdiFinal) { setError('Okul adını seçin veya yazın.'); return; }
-    if (!fields.schoolType) { setError('Okul türünü seçin.'); return; }
     setBusy(true);
     const res = await startSignup({
       fullName: fields.fullName.trim(),
@@ -66,7 +64,6 @@ export default function SignupPage() {
       okulAdi: okulAdiFinal,
       il: fields.il,
       ilce: fields.ilce,
-      schoolType: fields.schoolType,
     });
     setBusy(false);
     if (res?.error) { setError(res.error); return; }
@@ -85,7 +82,6 @@ export default function SignupPage() {
       okulAdi: okulAdiFinal,
       il: fields.il,
       ilce: fields.ilce,
-      schoolType: fields.schoolType,
     });
     setBusy(false);
     if (res?.error) setError(res.error);
@@ -148,7 +144,7 @@ export default function SignupPage() {
                   {!fields.ilce ? 'Önce il ve ilçe seçin' : schoolsLoading ? 'Okullar yükleniyor...' : 'Seçiniz'}
                 </option>
                 {schoolOptions.map((s) => (
-                  <option key={s.name} value={s.name}>{s.name} ({s.typeLabel})</option>
+                  <option key={s.name} value={s.name}>{s.name}</option>
                 ))}
                 {fields.ilce && !schoolsLoading && (
                   <>
@@ -170,16 +166,6 @@ export default function SignupPage() {
                 />
               </div>
             )}
-
-            <div className="auth-field">
-              <label>Okul Türü</label>
-              <select value={fields.schoolType} onChange={(e) => updateField('schoolType', e.target.value)} required>
-                <option value="" disabled>Seçiniz</option>
-                {Object.entries(SCHOOL_TYPE_LABELS).map(([value, label]) => (
-                  <option key={value} value={value}>{label}</option>
-                ))}
-              </select>
-            </div>
 
             <div className="auth-field">
               <label>E-posta</label>
