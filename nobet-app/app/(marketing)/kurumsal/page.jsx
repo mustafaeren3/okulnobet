@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { CheckCircle2, Mail } from 'lucide-react';
 import { submitEnterpriseLead } from './actions';
-import { CONTACT_EMAIL } from '../../components/Footer';
+import { CONTACT_EMAIL } from '../../components/contactInfo';
 
 export default function KurumsalPage() {
   const [fields, setFields] = useState({ schoolName: '', contactName: '', phone: '', email: '', teacherCountEstimate: '', note: '' });

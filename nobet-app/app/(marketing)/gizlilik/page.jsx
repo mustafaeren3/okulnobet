@@ -1,8 +1,28 @@
-import { CONTACT_EMAIL } from '../../components/Footer';
+import { CONTACT_EMAIL } from '../../components/contactInfo';
+import { createClient } from '@/lib/supabase/server';
+import { getSiteContent, getSeoMeta } from '@/lib/db/cms';
 
-export const metadata = { title: 'Gizlilik Politikası' };
+export async function generateMetadata() {
+  const supabase = createClient();
+  const seo = await getSeoMeta(supabase, '/gizlilik').catch(() => null);
+  return { title: seo?.title || 'Gizlilik Politikası', description: seo?.description || undefined };
+}
 
-export default function GizlilikPage() {
+// İçerik Yönetimi → KVKK & Gizlilik Politikası'nda bir metin girilmişse
+// (bodyHtml) o gösterilir; boşsa aşağıdaki varsayılan (şablon/placeholder
+// içeren) metin aynen kalır — bkz. lib/db/cms.js.
+export default async function GizlilikPage() {
+  const supabase = createClient();
+  const content = await getSiteContent(supabase, 'legal_privacy').catch(() => null);
+  if (content?.bodyHtml) {
+    return (
+      <main className="mkt-main mkt-narrow">
+        <div className="mkt-hero" style={{ padding: '20px 0 8px' }}><h1>Gizlilik Politikası</h1></div>
+        <div className="mkt-section" dangerouslySetInnerHTML={{ __html: content.bodyHtml }} />
+      </main>
+    );
+  }
+
   return (
     <main className="mkt-main mkt-narrow">
       <div className="mkt-hero" style={{ padding: '20px 0 8px' }}>

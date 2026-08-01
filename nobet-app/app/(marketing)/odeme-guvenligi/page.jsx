@@ -1,6 +1,6 @@
 import { AlertTriangle } from 'lucide-react';
 import Alert from '../../components/Alert';
-import { SUPPORT_EMAIL } from '../../components/Footer';
+import { SUPPORT_EMAIL } from '../../components/contactInfo';
 
 export const metadata = { title: 'Ödeme Güvenliği' };
 

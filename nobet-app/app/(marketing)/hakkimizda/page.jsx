@@ -1,4 +1,4 @@
-import { CONTACT_EMAIL } from '../../components/Footer';
+import { CONTACT_EMAIL } from '../../components/contactInfo';
 
 export const metadata = { title: 'Hakkımızda' };
 

@@ -1,8 +1,27 @@
-import { CONTACT_EMAIL } from '../../components/Footer';
+import { CONTACT_EMAIL } from '../../components/contactInfo';
+import { createClient } from '@/lib/supabase/server';
+import { getSiteContent, getSeoMeta } from '@/lib/db/cms';
 
-export const metadata = { title: 'Kullanım Şartları' };
+export async function generateMetadata() {
+  const supabase = createClient();
+  const seo = await getSeoMeta(supabase, '/kullanim-sartlari').catch(() => null);
+  return { title: seo?.title || 'Kullanım Şartları', description: seo?.description || undefined };
+}
 
-export default function KullanimSartlariPage() {
+// İçerik Yönetimi → Kullanım Şartları'nda bir metin girilmişse (bodyHtml)
+// o gösterilir; boşsa aşağıdaki varsayılan metin aynen kalır.
+export default async function KullanimSartlariPage() {
+  const supabase = createClient();
+  const content = await getSiteContent(supabase, 'legal_terms').catch(() => null);
+  if (content?.bodyHtml) {
+    return (
+      <main className="mkt-main mkt-narrow">
+        <div className="mkt-hero" style={{ padding: '20px 0 8px' }}><h1>Kullanım Şartları</h1></div>
+        <div className="mkt-section" dangerouslySetInnerHTML={{ __html: content.bodyHtml }} />
+      </main>
+    );
+  }
+
   return (
     <main className="mkt-main mkt-narrow">
       <div className="mkt-hero" style={{ padding: '20px 0 8px' }}>

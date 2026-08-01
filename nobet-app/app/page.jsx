@@ -1,11 +1,14 @@
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
-import { Repeat2, Scale, Flag, Printer, ShieldCheck, Zap, Building2 } from 'lucide-react';
+import { ShieldCheck, Zap, Flag as FlagIcon, Building2 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
 import { isPlatformAdmin } from '@/lib/db/platformAdmin';
+import { getSiteContent, getSeoMeta } from '@/lib/db/cms';
+import { withDefaults } from '@/lib/data/siteContentDefaults';
 import { STANDARD_YEARLY_PRICE, formatTL } from '@/lib/engine/pricing';
 import Navbar from './components/Navbar';
-import Footer, { CONTACT_EMAIL } from './components/Footer';
+import Footer from './components/Footer';
+import { CONTACT_EMAIL } from './components/contactInfo';
 import Card from './components/Card';
 import Button from './components/Button';
 import HeroMockup from './components/HeroMockup';
@@ -14,51 +17,40 @@ import VideoPlaceholder from './components/VideoPlaceholder';
 import ProcessSteps from './components/ProcessSteps';
 import FAQAccordion from './components/FAQAccordion';
 import Reveal from './components/Reveal';
+import DynamicLucideIcon from './components/DynamicLucideIcon';
 import './(marketing)/marketing.css';
 import './(marketing)/landing.css';
+
+// SEO — Faz 2.3: seo_meta tablosundan (admin panel → SEO) besleniyor,
+// hiç düzenlenmemişse layout.jsx'teki varsayılana düşer (Next.js
+// generateMetadata + üst layout metadata'sını otomatik birleştirir).
+export async function generateMetadata() {
+  const supabase = createClient();
+  const seo = await getSeoMeta(supabase, '/').catch(() => null);
+  if (!seo) return {};
+  return {
+    title: seo.title || undefined,
+    description: seo.description || undefined,
+    keywords: seo.keywords || undefined,
+    alternates: seo.canonical ? { canonical: seo.canonical } : undefined,
+    robots: seo.noindex ? { index: false, follow: false } : undefined,
+    openGraph: {
+      title: seo.og_title || seo.title || undefined,
+      description: seo.og_description || seo.description || undefined,
+      images: seo.og_image ? [seo.og_image] : undefined,
+    },
+    twitter: seo.twitter_card ? { card: seo.twitter_card } : undefined,
+  };
+}
 
 // Kök `/` route'u — (marketing) route group'un DIŞINDA (parantezli
 // gruplar URL'e eklenmiyor, aynı route group içine ikinci bir page.jsx
 // koymak `/` için çakışma yaratır). Navbar/Footer artık paylaşılan
 // bileşenler, bu yüzden markup burada tekrar tanımlanmıyor.
-
-const PILOT_NOTES = [
-  {
-    role: 'Müdür Yardımcısı, Devlet Okulu',
-    quote: 'Nöbet çizelgesini her ay elle hazırlamak saatler alıyordu; birkaç dakikada bitmesi büyük fark yaratıyor.',
-  },
-  {
-    role: 'Okul Müdürü',
-    quote: 'Kimin ne zaman nöbet tuttuğu artık şeffaf — kimse sırasının atlandığını iddia edemiyor.',
-  },
-  {
-    role: 'Nöbetçi Öğretmen',
-    quote: 'Programı telefonumdan görebiliyorum, kağıt liste asılmasını beklemem gerekmiyor.',
-  },
-];
-
-const FAQS = [
-  {
-    q: 'OkulNöbet tam olarak ne yapıyor?',
-    a: 'Okulundaki öğretmen ve nöbet bölgelerini tanımlıyorsun; sistem, belirlediğin kurallara (branş, gün kısıtı, çift nöbet vb.) uyarak ve adil bir rotasyonla otomatik nöbet programı üretiyor. Elle düzenleme ve kilitleme her zaman mümkün.',
-  },
-  {
-    q: 'Ücretsiz deneme var mı?',
-    a: 'Süre sınırı yok — ücretsiz kaydolup okulunu kurabilir, tüm dönem için programı üretebilirsin. Ücretsiz planda üretilen programın yalnızca ilk ayı görüntülenebilir ve okul toplam 1 kez tam program üretebilir.',
-  },
-  {
-    q: 'Fiyat nasıl belirleniyor?',
-    a: 'Standart plan sabit bir yıllık fiyattır, öğretmen sayısından bağımsızdır. Güncel fiyatı Fiyatlandırma sayfasında görebilirsin.',
-  },
-  {
-    q: 'Verilerimiz güvende mi?',
-    a: 'Her okulun verisi diğer okullardan tamamen izole tutulur (satır seviyesi güvenlik). Detaylar için Gizlilik Politikası sayfasına bakabilirsin.',
-  },
-  {
-    q: 'Aboneliğimi iptal edebilir miyim?',
-    a: 'Evet, istediğin zaman iptal edebilirsin. İptal sonrası mevcut fatura döneminin sonuna kadar kullanıma devam edebilirsin.',
-  },
-];
+//
+// Hero/Özellikler/Referanslar/SSS metinleri artık site_content'ten
+// (admin panel → İçerik Yönetimi) geliyor — sabit dizi kaldırıldı, bkz.
+// lib/data/siteContentDefaults.js (DB boşsa fallback aynı metinler).
 
 export default async function Home() {
   const supabase = createClient();
@@ -73,6 +65,18 @@ export default async function Home() {
     redirect(isAdmin ? '/super-admin' : '/dashboard');
   }
 
+  const [heroRaw, featuresRaw, testimonialsRaw, faqRaw] = await Promise.all([
+    getSiteContent(supabase, 'hero').catch(() => null),
+    getSiteContent(supabase, 'features').catch(() => null),
+    getSiteContent(supabase, 'testimonials').catch(() => null),
+    getSiteContent(supabase, 'faq').catch(() => null),
+  ]);
+  const hero = withDefaults('hero', heroRaw);
+  const features = withDefaults('features', featuresRaw);
+  const testimonials = withDefaults('testimonials', testimonialsRaw);
+  const faq = withDefaults('faq', faqRaw);
+  const heroTitleLines = hero.title.split('\n');
+
   return (
     <div className="mkt-root">
       <Navbar />
@@ -81,18 +85,16 @@ export default async function Home() {
         {/* ── HERO ─────────────────────────────────────────────── */}
         <div className="mkt-hero mkt-hero-split">
           <div className="mkt-hero-copy">
-            <h1>OkulNöbet ile Programınızı<br />Dakikalar İçinde Oluşturun</h1>
-            <p>
-              Okullar için otomatik nöbet planlama, adil dağıtım, MEB takvimi, tek tıkla PDF çıktısı.
-            </p>
+            <h1>{heroTitleLines.map((line, i) => (<span key={i}>{i > 0 && <br />}{line}</span>))}</h1>
+            <p>{hero.subtitle}</p>
             <div className="mkt-hero-actions" style={{ justifyContent: 'flex-start' }}>
-              <Button href="/signup" variant="primary" size="lg">Ücretsiz Başla</Button>
-              <Link href="/fiyatlandirma" className="mkt-hero-secondary-link">Fiyatlandırmayı gör →</Link>
+              <Button href={hero.ctaPrimaryHref} variant="primary" size="lg">{hero.ctaPrimaryLabel}</Button>
+              <Link href={hero.ctaSecondaryHref} className="mkt-hero-secondary-link">{hero.ctaSecondaryLabel}</Link>
             </div>
             <div className="mkt-hero-trustbar">
               <span><ShieldCheck size={14} /> KVKK uyumlu</span>
               <span><Zap size={14} /> Kurulum gerektirmez</span>
-              <span><Flag size={14} /> MEB takvimiyle uyumlu</span>
+              <span><FlagIcon size={14} /> MEB takvimiyle uyumlu</span>
             </div>
           </div>
           <div className="mkt-hero-visual">
@@ -135,26 +137,13 @@ export default async function Home() {
             <h2>Elle Yapmanın Tüm Zahmetini Ortadan Kaldırır</h2>
           </div>
           <div className="mkt-feature-grid">
-            <Card>
-              <div className="mkt-icon"><Repeat2 size={24} /></div>
-              <h4>Otomatik Rotasyon</h4>
-              <p>Haftalık veya aylık dönme düzeni ile her öğretmen sırayla, adil şekilde nöbet tutar.</p>
-            </Card>
-            <Card>
-              <div className="mkt-icon"><Scale size={24} /></div>
-              <h4>Kurallara Uygun</h4>
-              <p>Branş, gün kısıtı, izin/rapor ve çift nöbet kuralları otomatik uygulanır.</p>
-            </Card>
-            <Card>
-              <div className="mkt-icon"><Flag size={24} /></div>
-              <h4>MEB Tatil Takvimi</h4>
-              <p>Resmi tatiller tek tuşla yüklenir, nöbet sırası tatillerde ilerlemez.</p>
-            </Card>
-            <Card>
-              <div className="mkt-icon"><Printer size={24} /></div>
-              <h4>Resmi Evrak Çıktısı</h4>
-              <p>İmza bölümlü, yazdırmaya hazır nöbet çizelgesi oluştur.</p>
-            </Card>
+            {features.items.map((f) => (
+              <Card key={f.title}>
+                <div className="mkt-icon"><DynamicLucideIcon name={f.icon} size={24} /></div>
+                <h4>{f.title}</h4>
+                <p>{f.description}</p>
+              </Card>
+            ))}
           </div>
         </Reveal>
 
@@ -166,7 +155,7 @@ export default async function Home() {
             <p className="mkt-section-sub">Gerçek müşteri yorumu yerine, ürünü tasarlarken yol gösterici olan tipik ihtiyaçları paylaşıyoruz.</p>
           </div>
           <div className="mkt-pilot-grid">
-            {PILOT_NOTES.map((n) => (
+            {testimonials.items.map((n) => (
               <Card key={n.role} className="mkt-pilot-card">
                 <p>&ldquo;{n.quote}&rdquo;</p>
                 <div className="mkt-pilot-role">{n.role}</div>
@@ -210,7 +199,7 @@ export default async function Home() {
             <span className="mkt-eyebrow">Merak Edilenler</span>
             <h2>Sık Sorulan Sorular</h2>
           </div>
-          <FAQAccordion items={FAQS} />
+          <FAQAccordion items={faq.items} />
           <div style={{ textAlign: 'center', marginTop: 24 }}>
             <Link href="/sss" className="mkt-hero-secondary-link">Tüm soruları gör →</Link>
           </div>
