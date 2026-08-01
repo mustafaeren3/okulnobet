@@ -113,6 +113,12 @@ export async function fetchTeskilatOgretmenleri(url) {
     return { error: 'Sadece *.meb.k12.tr adresleri desteklenir.' };
   }
 
+  // Mevcut öğretmen listesi dış siteden HTML çekmekten BAĞIMSIZ — ikisi
+  // birbirini beklemeden paralel başlatılıyor. Dış ağ isteği (meb.k12.tr)
+  // baskın maliyet olduğu için bu, en azından DB sorgusunun süresini onun
+  // üstüne eklemiyor (önceden: fetch bitsin → SONRA getTeachers başlasın).
+  const existingPromise = getTeachers(supabase, schoolId);
+
   let html;
   try {
     const controller = new AbortController();
@@ -122,9 +128,10 @@ export async function fetchTeskilatOgretmenleri(url) {
       signal: controller.signal,
     });
     clearTimeout(timeout);
-    if (!res.ok) return { error: `Sayfa alınamadı (HTTP ${res.status}).` };
+    if (!res.ok) { existingPromise.catch(() => {}); return { error: `Sayfa alınamadı (HTTP ${res.status}).` }; }
     html = await res.text();
   } catch (e) {
+    existingPromise.catch(() => {});
     return { error: 'Sayfaya ulaşılamadı: ' + e.message };
   }
 
@@ -139,12 +146,13 @@ export async function fetchTeskilatOgretmenleri(url) {
   }
 
   if (!found.length) {
+    existingPromise.catch(() => {});
     return { error: 'Sayfada uygun öğretmen bulunamadı. Bu sitenin yapısı desteklenen şablondan farklı olabilir.' };
   }
 
   let existing;
   try {
-    existing = await getTeachers(supabase, schoolId);
+    existing = await existingPromise;
   } catch (e) {
     return { error: e.message };
   }

@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useMemo, useState } from 'react';
+import { Fragment, memo, useCallback, useMemo, useState } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import {
@@ -290,6 +290,54 @@ function ScheduleCell({ date, zoneId, entries, teacherOptions, onRefresh }) {
   );
 }
 
+// Personel listesindeki tek bir satır — önceden Dashboard'un dev .map()
+// gövdesine gömülüydü, bu yüzden Dashboard içindeki HERHANGİ bir state
+// değişikliği (program/kural sekmesinde yazı yazmak dahil) 50+ öğretmen
+// satırının tamamını yeniden render ediyordu. memo() ile ayrı bileşene
+// alındı: sadece BU öğretmene ait prop'lar değiştiğinde yeniden render
+// olur. Gün/Yer Kısıtı paneli (açıldığında formu dolduran state) bilerek
+// Dashboard'da kaldı — aynı anda sadece TEK satır açık olabildiği için o
+// formun her tuş vuruşu zaten sadece 1 satırı etkiliyor, ayrı bileşene
+// almanın getirisi yok, riski var (fetch/save akışını taşımak gerekirdi).
+const TeacherRow = memo(function TeacherRow({
+  teacher: t,
+  zoneName,
+  isExpandedDay,
+  isExpandedZone,
+  onToggleDoubleDuty,
+  onToggleExpandDay,
+  onToggleExpandZone,
+  onRemove,
+}) {
+  return (
+    <div className="person-item" style={t.is_active ? undefined : { opacity: 0.5 }}>
+      <div className="person-color" style={{ background: `#${colorForName(t.full_name)}` }} />
+      <span className="person-name">{t.full_name} <span style={{ color: 'var(--muted)', fontWeight: 400 }}>({t.branch})</span></span>
+      <span className="person-tag" style={{ background: 'var(--border)', color: 'var(--muted)' }}>{RESTRICTION_LABELS[t.restriction_mode]}</span>
+      {t.fixed_zone_id && (
+        <span className="person-tag" style={{ background: 'var(--border)', color: 'var(--muted)', display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+          <MapPin size={10} /> {zoneName || '—'}
+        </span>
+      )}
+      <button
+        className={`person-tag ${t.allow_double_duty ? 'tag-new' : ''}`}
+        style={!t.allow_double_duty ? { background: 'none', border: '1px solid var(--border)', color: 'var(--muted)', cursor: 'pointer' } : { cursor: 'pointer', border: 'none' }}
+        title="Gerekirse çift nöbet tutabilir"
+        onClick={() => onToggleDoubleDuty(t)}
+      >
+        2×
+      </button>
+      <button className="person-tag" style={{ background: 'none', border: '1px solid var(--border)', color: 'var(--muted)', cursor: 'pointer' }} onClick={() => onToggleExpandDay(t)}>
+        {isExpandedDay ? 'Kapat' : 'Gün Kısıtı'}
+      </button>
+      <button className="person-tag" style={{ background: 'none', border: '1px solid var(--border)', color: 'var(--muted)', cursor: 'pointer' }} onClick={() => onToggleExpandZone(t)}>
+        {isExpandedZone ? 'Kapat' : 'Yer Kısıtı'}
+      </button>
+      <button className="person-del" onClick={() => onRemove(t)} aria-label="Öğretmeni sil"><X size={14} /></button>
+    </div>
+  );
+});
+
 export default function Dashboard({
   schoolName,
   initialTeachers,
@@ -339,6 +387,14 @@ export default function Dashboard({
     setInpWeekdays((days) => (days.includes(value) ? days.filter((d) => d !== value) : [...days, value]));
   }
 
+  // Optimistic add: sunucu yanıtını beklemeden geçici (temp-) id'li satır
+  // hemen listeye ve inputlar hemen sıfırlanır — kullanıcı DB round-trip'ini
+  // hissetmez. Doğrulama/kaydetme sırası (full_name/branch/mode/weekdays)
+  // AYNEN korunuyor, sadece state güncelleme ANI öne alındı; gün kısıtı
+  // kaydı hâlâ addTeacher'dan SONRA ve hâlâ hata olursa akış durduruluyor
+  // (business logic değişmedi). inpMode/inpWeekdays state'i optimistic
+  // temizlik için sıfırlanmadan ÖNCE yerel değişkene alınıyor — aksi halde
+  // aşağıdaki "mode !== 'ALL'" kontrolü sıfırlanmış değeri okurdu.
   async function handleAddTeacher() {
     const full_name = inpName.trim();
     const branch = inpBranch.trim();
@@ -346,33 +402,54 @@ export default function Dashboard({
     if (!branch) { showToast('Branş giriniz!', true); return; }
     if (inpMode !== 'ALL' && !inpWeekdays.length) { showToast('Seçili gün(ler) giriniz!', true); return; }
 
+    const mode = inpMode;
+    const weekdays = inpWeekdays;
+    const doubleDuty = inpDoubleDuty;
+    const fixedZoneId = inpFixedZoneId || null;
+    const tempId = `temp-${Date.now()}`;
+
     setSavingTeacher(true);
-    const result = await addTeacher({
-      full_name,
-      branch,
-      allow_double_duty: inpDoubleDuty,
-      restriction_mode: inpMode,
-      fixed_zone_id: inpFixedZoneId || null,
-    });
-
-    if (result.error) { setSavingTeacher(false); showToast(result.error, true); return; }
-
-    if (inpMode !== 'ALL') {
-      const availResult = await saveTeacherAvailability(result.teacher.id, inpWeekdays);
-      if (availResult.error) { setSavingTeacher(false); showToast(availResult.error, true); return; }
-    }
-
-    setTeachers((t) => [...t, result.teacher].sort((a, b) => a.full_name.localeCompare(b.full_name, 'tr')));
+    setTeachers((t) => [
+      ...t,
+      { id: tempId, full_name, branch, allow_double_duty: doubleDuty, restriction_mode: mode, fixed_zone_id: fixedZoneId, is_active: true },
+    ].sort((a, b) => a.full_name.localeCompare(b.full_name, 'tr')));
     setInpName('');
     setInpBranch('');
     setInpDoubleDuty(false);
     setInpMode('ALL');
     setInpWeekdays([]);
     setInpFixedZoneId('');
+
+    const result = await addTeacher({ full_name, branch, allow_double_duty: doubleDuty, restriction_mode: mode, fixed_zone_id: fixedZoneId });
+
+    if (result.error) {
+      setTeachers((t) => t.filter((x) => x.id !== tempId));
+      setSavingTeacher(false);
+      showToast(result.error, true);
+      return;
+    }
+
+    if (mode !== 'ALL') {
+      const availResult = await saveTeacherAvailability(result.teacher.id, weekdays);
+      if (availResult.error) {
+        setTeachers((t) => t.map((x) => (x.id === tempId ? result.teacher : x)));
+        setSavingTeacher(false);
+        showToast(availResult.error, true);
+        return;
+      }
+    }
+
+    setTeachers((t) => t.map((x) => (x.id === tempId ? result.teacher : x)));
     setSavingTeacher(false);
     showToast(`${full_name} eklendi`);
   }
 
+  // Teşkilat şeması importu: hangi öğretmenlerin ekleneceği ancak MEB
+  // sitesi HTML'i sunucuda çekilip parse edildikten SONRA bilinebiliyor —
+  // yani bu adımda "önce state, sonra ağ" optimizasyonu YAPILAMAZ (henüz
+  // hangi isimlerin geleceği bilinmiyor). Asıl darboğaz zaten DB tarafında
+  // değil — createTeachersBulk (lib/db/teachers.js) tek insert([...]) ile
+  // toplu ekliyor, tek tek insert yok. Bkz. rapor.
   async function handleFetchTeskilat() {
     const url = teskilatUrl.trim();
     if (!url) { showToast('Teşkilat şeması adresini giriniz!', true); return; }
@@ -388,21 +465,37 @@ export default function Dashboard({
     showToast(`${result.totalFound} öğretmen bulundu, ${result.added.length} eklendi (${result.skipped} zaten vardı)`);
   }
 
-  async function toggleTeacherDoubleDuty(teacher) {
-    const result = await editTeacher(teacher.id, { allow_double_duty: !teacher.allow_double_duty });
-    if (result.error) { showToast(result.error, true); return; }
+  const toggleTeacherDoubleDuty = useCallback(async (teacher) => {
+    const next = !teacher.allow_double_duty;
+    setTeachers((list) => list.map((t) => (t.id === teacher.id ? { ...t, allow_double_duty: next } : t)));
+    const result = await editTeacher(teacher.id, { allow_double_duty: next });
+    if (result.error) {
+      setTeachers((list) => list.map((t) => (t.id === teacher.id ? { ...t, allow_double_duty: !next } : t)));
+      showToast(result.error, true);
+      return;
+    }
     setTeachers((list) => list.map((t) => (t.id === teacher.id ? result.teacher : t)));
-  }
+  }, [showToast]);
 
-  async function handleRemoveTeacher(teacher) {
-    const result = await removeTeacher(teacher.id);
-    if (result.error) { showToast(result.error, true); return; }
+  // Optimistic delete: satır TIKLANIR TIKLANMAZ listeden kalkıyor, silme
+  // isteği arka planda yürüyor. Sunucu hata dönerse öğretmen (aynı verisiyle)
+  // listeye geri ekleniyor ve hata gösteriliyor — kullanıcı "geç kayboluyor"
+  // hissini yaşamıyor, ama başarısız silme sessizce kaybolmuyor da.
+  const handleRemoveTeacher = useCallback(async (teacher) => {
     setTeachers((list) => list.filter((t) => t.id !== teacher.id));
-    if (expandedId === teacher.id) setExpandedId(null);
-    showToast(`${teacher.full_name} silindi`);
-  }
+    setExpandedId((id) => (id === teacher.id ? null : id));
+    setExpandedPanel((panel) => (expandedId === teacher.id ? null : panel));
 
-  async function toggleExpand(teacher, panel) {
+    const result = await removeTeacher(teacher.id);
+    if (result.error) {
+      setTeachers((list) => [...list, teacher].sort((a, b) => a.full_name.localeCompare(b.full_name, 'tr')));
+      showToast(result.error, true);
+      return;
+    }
+    showToast(`${teacher.full_name} silindi`);
+  }, [expandedId, showToast]);
+
+  const toggleExpand = useCallback(async (teacher, panel) => {
     if (expandedId === teacher.id && expandedPanel === panel) { setExpandedId(null); setExpandedPanel(null); return; }
     setExpandedId(teacher.id);
     setExpandedPanel(panel);
@@ -415,7 +508,10 @@ export default function Dashboard({
     const result = await fetchTeacherAvailability(teacher.id);
     if (result.error) { showToast(result.error, true); return; }
     setExpandedWeekdays(result.weekdays);
-  }
+  }, [expandedId, expandedPanel, showToast]);
+
+  const handleToggleExpandDay = useCallback((teacher) => toggleExpand(teacher, 'day'), [toggleExpand]);
+  const handleToggleExpandZone = useCallback((teacher) => toggleExpand(teacher, 'zone'), [toggleExpand]);
 
   function toggleExpandedWeekday(value) {
     setExpandedWeekdays((days) => (days.includes(value) ? days.filter((d) => d !== value) : [...days, value]));
@@ -1039,31 +1135,16 @@ export default function Dashboard({
               <div className="person-list">
                 {teachers.map((t) => (
                   <Fragment key={t.id}>
-                    <div className="person-item" style={t.is_active ? undefined : { opacity: 0.5 }}>
-                      <div className="person-color" style={{ background: `#${colorForName(t.full_name)}` }} />
-                      <span className="person-name">{t.full_name} <span style={{ color: 'var(--muted)', fontWeight: 400 }}>({t.branch})</span></span>
-                      <span className="person-tag" style={{ background: 'var(--border)', color: 'var(--muted)' }}>{RESTRICTION_LABELS[t.restriction_mode]}</span>
-                      {t.fixed_zone_id && (
-                        <span className="person-tag" style={{ background: 'var(--border)', color: 'var(--muted)', display: 'inline-flex', alignItems: 'center', gap: 3 }}>
-                          <MapPin size={10} /> {zoneNameById[t.fixed_zone_id] || '—'}
-                        </span>
-                      )}
-                      <button
-                        className={`person-tag ${t.allow_double_duty ? 'tag-new' : ''}`}
-                        style={!t.allow_double_duty ? { background: 'none', border: '1px solid var(--border)', color: 'var(--muted)', cursor: 'pointer' } : { cursor: 'pointer', border: 'none' }}
-                        title="Gerekirse çift nöbet tutabilir"
-                        onClick={() => toggleTeacherDoubleDuty(t)}
-                      >
-                        2×
-                      </button>
-                      <button className="person-tag" style={{ background: 'none', border: '1px solid var(--border)', color: 'var(--muted)', cursor: 'pointer' }} onClick={() => toggleExpand(t, 'day')}>
-                        {expandedId === t.id && expandedPanel === 'day' ? 'Kapat' : 'Gün Kısıtı'}
-                      </button>
-                      <button className="person-tag" style={{ background: 'none', border: '1px solid var(--border)', color: 'var(--muted)', cursor: 'pointer' }} onClick={() => toggleExpand(t, 'zone')}>
-                        {expandedId === t.id && expandedPanel === 'zone' ? 'Kapat' : 'Yer Kısıtı'}
-                      </button>
-                      <button className="person-del" onClick={() => handleRemoveTeacher(t)} aria-label="Öğretmeni sil"><X size={14} /></button>
-                    </div>
+                    <TeacherRow
+                      teacher={t}
+                      zoneName={t.fixed_zone_id ? zoneNameById[t.fixed_zone_id] : null}
+                      isExpandedDay={expandedId === t.id && expandedPanel === 'day'}
+                      isExpandedZone={expandedId === t.id && expandedPanel === 'zone'}
+                      onToggleDoubleDuty={toggleTeacherDoubleDuty}
+                      onToggleExpandDay={handleToggleExpandDay}
+                      onToggleExpandZone={handleToggleExpandZone}
+                      onRemove={handleRemoveTeacher}
+                    />
                     {expandedId === t.id && expandedPanel === 'day' && (
                       <div style={{ background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 8, padding: 12, marginTop: -2 }}>
                         <label style={{ marginBottom: 6 }}>Kısıt Türü</label>
