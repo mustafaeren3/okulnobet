@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Eye, EyeOff } from 'lucide-react';
 import { startSignup, resendSignupCode, verifySignupCode, fetchSchoolsForDistrict } from './actions';
 import { MEB_PROVINCES, getDistrictsForProvince } from '@/lib/data/mebProvinceDistricts';
+import { SCHOOL_TYPE_LABELS } from '@/lib/data/schoolTypes';
 import Logo from '../../components/Logo';
 import '../auth.css';
 
@@ -15,7 +16,7 @@ export default function SignupPage() {
   // phase 'form': bilgiler toplanır. phase 'code': e-postaya giden 6
   // haneli kod girilir, doğrulanınca okul oluşturulur.
   const [phase, setPhase] = useState('form');
-  const [fields, setFields] = useState({ il: '', ilce: '', okulSecim: '', okulAdiManual: '', email: '', phone: '', password: '' });
+  const [fields, setFields] = useState({ fullName: '', il: '', ilce: '', okulSecim: '', okulAdiManual: '', schoolType: '', email: '', password: '' });
   const [schoolOptions, setSchoolOptions] = useState([]);
   const [schoolsLoading, setSchoolsLoading] = useState(false);
   const [code, setCode] = useState('');
@@ -49,11 +50,6 @@ export default function SignupPage() {
     setFields((f) => ({ ...f, ilce: value, okulSecim: '', okulAdiManual: '' }));
   }
 
-  function handlePhoneChange(value) {
-    // Sadece rakam — kullanıcı tire/boşluk/harf yazsa bile temizlenir.
-    updateField('phone', value.replace(/[^0-9]/g, '').slice(0, 11));
-  }
-
   const isManualEntry = fields.okulSecim === OKUL_DIGER_VALUE || fields.okulSecim === OKUL_OZEL_VALUE;
   const okulAdiFinal = isManualEntry ? fields.okulAdiManual.trim() : fields.okulSecim;
 
@@ -61,20 +57,22 @@ export default function SignupPage() {
     e.preventDefault();
     setError('');
     if (!okulAdiFinal) { setError('Okul adını seçin veya yazın.'); return; }
+    if (!fields.schoolType) { setError('Okul türünü seçin.'); return; }
     setBusy(true);
     const res = await startSignup({
+      fullName: fields.fullName.trim(),
       email: fields.email,
       password: fields.password,
       okulAdi: okulAdiFinal,
       il: fields.il,
       ilce: fields.ilce,
-      phone: fields.phone,
+      schoolType: fields.schoolType,
     });
     setBusy(false);
     if (res?.error) { setError(res.error); return; }
-    // res.needsCode yoksa server action zaten redirect('/dashboard') tetiklemiştir
-    // ("Confirm email" kapalıyken hesap anında onaylı dönüyor).
-    if (res?.needsCode) setPhase('code');
+    // OTP doğrulanmadan hesap/okul tamamlanmıyor — startSignup() artık HİÇBİR
+    // durumda doğrudan dashboard'a yönlendirmiyor, her zaman kod adımına geçilir.
+    setPhase('code');
   }
 
   async function handleVerify(e) {
@@ -87,7 +85,7 @@ export default function SignupPage() {
       okulAdi: okulAdiFinal,
       il: fields.il,
       ilce: fields.ilce,
-      phone: fields.phone,
+      schoolType: fields.schoolType,
     });
     setBusy(false);
     if (res?.error) setError(res.error);
@@ -112,6 +110,11 @@ export default function SignupPage() {
 
         {phase === 'form' && (
           <form onSubmit={handleStartSignup} style={{ marginTop: 20 }}>
+            <div className="auth-field">
+              <label>Ad Soyad</label>
+              <input value={fields.fullName} onChange={(e) => updateField('fullName', e.target.value)} placeholder="Ayşe Yılmaz" required />
+            </div>
+
             <div className="auth-row">
               <div className="auth-field">
                 <label>İl</label>
@@ -169,20 +172,18 @@ export default function SignupPage() {
             )}
 
             <div className="auth-field">
+              <label>Okul Türü</label>
+              <select value={fields.schoolType} onChange={(e) => updateField('schoolType', e.target.value)} required>
+                <option value="" disabled>Seçiniz</option>
+                {Object.entries(SCHOOL_TYPE_LABELS).map(([value, label]) => (
+                  <option key={value} value={value}>{label}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="auth-field">
               <label>E-posta</label>
               <input value={fields.email} onChange={(e) => updateField('email', e.target.value)} type="email" placeholder="ornek@okul.com" required />
-            </div>
-            <div className="auth-field">
-              <label>Telefon</label>
-              <input
-                value={fields.phone}
-                onChange={(e) => handlePhoneChange(e.target.value)}
-                type="tel"
-                inputMode="numeric"
-                placeholder="05XXXXXXXXX"
-                required
-                minLength={10}
-              />
             </div>
             <div className="auth-field">
               <label htmlFor="signup-password">Şifre</label>

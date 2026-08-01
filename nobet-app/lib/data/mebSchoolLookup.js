@@ -3,25 +3,9 @@
 // içinden import edilmeli — client bileşenine asla import edilmemeli,
 // aksi halde tüm veri client bundle'ına dahil olur.
 import schoolsData from './mebSchools.json';
+import { SCHOOL_TYPE_LABELS } from './schoolTypes';
 
-export const SCHOOL_TYPE_LABELS = {
-  ilkokul: 'İlkokul',
-  ortaokul: 'Ortaokul',
-  imam_hatip_ortaokulu: 'İmam Hatip Ortaokulu',
-  lise: 'Lise',
-  anadolu_lisesi: 'Anadolu Lisesi',
-  fen_lisesi: 'Fen Lisesi',
-  sosyal_bilimler_lisesi: 'Sosyal Bilimler Lisesi',
-  imam_hatip_lisesi: 'İmam Hatip Lisesi',
-  mesleki_teknik_lise: 'Mesleki ve Teknik Lise',
-  guzel_sanatlar_lisesi: 'Güzel Sanatlar Lisesi',
-  spor_lisesi: 'Spor Lisesi',
-  anaokulu: 'Anaokulu',
-  ozel_egitim: 'Özel Eğitim',
-  halk_egitim: 'Halk Eğitimi',
-  diger_kurum: 'Diğer Kurum',
-  diger: 'Diğer',
-};
+export { SCHOOL_TYPE_LABELS };
 
 export const OKUL_DIGER_VALUE = '__DIGER__';
 export const OKUL_OZEL_VALUE = '__OZEL__';

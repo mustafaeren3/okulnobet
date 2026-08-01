@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import { checkRateLimit } from '@/lib/db/rateLimit';
 import { logSecurityEvent } from '@/lib/db/systemEvents';
+import { mapAuthErrorMessage } from '@/lib/errors';
 
 // Brute-force koruması: aynı e-posta için 5 dakikada en fazla 5 deneme
 // (bkz. 0026_rate_limiting_and_events.sql check_rate_limit — Postgres
@@ -24,7 +25,7 @@ export async function login(formData) {
   const { error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) {
     await logSecurityEvent(supabase, 'login_failed', { email });
-    return { error: error.message };
+    return { error: mapAuthErrorMessage(error.message) };
   }
   redirect('/dashboard');
 }

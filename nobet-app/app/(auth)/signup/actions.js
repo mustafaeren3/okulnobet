@@ -3,87 +3,74 @@
 import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import { getSchoolsForDistrict } from '@/lib/data/mebSchoolLookup';
+import { mapAuthErrorMessage, sanitizeDbErrorMessage } from '@/lib/errors';
 
-// İki aşamalı kayıt: (1) hesap oluştur → e-postaya 6 haneli onay kodu
-// gider (Supabase Auth "Confirm email" açık olmalı, e-posta şablonunda
-// {{ .Token }} kullanılmalı — bkz. proje kurulum notları), (2) kod
-// doğrulanınca okulu oluşturur. Okul, KOD DOĞRULANMADAN oluşturulmaz —
-// aksi halde onaysız/sahte bir e-postayla da okul açılabilirdi.
-// Telefon numarası da register_school'a gidiyor: "her e-posta/telefon
-// sadece bir deneme hesabı açabilir" kısıtı orada (trial_registrations,
-// bkz. 0013_pricing_and_trial_limits.sql) uygulanıyor.
+// İki aşamalı kayıt: (1) hesap oluştur — e-postaya 6 haneli OTP gider,
+// (2) kod doğrulanınca okul oluşturur. OTP doğrulanmadan school/
+// school_users/hiçbir tenant verisi OLUŞMAZ — register_school SADECE
+// verifySignupCode() içinde, başarılı verifyOtp()'den SONRA çağrılıyor;
+// startSignup() bunu hiç çağırmıyor ve hiç redirect etmiyor.
 //
-// "Confirm email" KAPALIYSA (ör. Resend domain doğrulaması henüz yokken
-// geçici test amaçlı) signUp çağrısı hiç kod göndermez, hesabı doğrudan
-// oturumlu döner — bu durumda kod adımını beklemeden okulu burada kurup
-// dashboard'a yönlendiriyoruz.
+// ÖNKOŞUL (kod dışı — Supabase Auth Dashboard ayarı): Authentication >
+// Providers > Email > "Confirm email" AÇIK olmalı. Kapalıysa signUp()
+// kod göndermeden hemen bir session döner; aşağıda bu durum tespit
+// edilip session fail-closed olarak hemen kapatılıyor — ama bu durumda
+// kullanıcıya kod da gelmeyeceği için (Confirm email kapalıyken Supabase
+// hiç kod göndermez) akış orada tıkanır. Bu bir kod hatası değil, dashboard
+// ayarının kodun varsaydığıyla çelişmesidir — Supabase dashboard'undan
+// doğrulanmalı, kod bunu kendi başına düzeltemez.
 
 export async function fetchSchoolsForDistrict(il, ilce) {
   if (!il || !ilce) return [];
   return getSchoolsForDistrict(il, ilce);
 }
 
-export async function startSignup({ email, password, okulAdi, il, ilce, phone }) {
+export async function startSignup({ fullName, email, password, okulAdi, il, ilce, schoolType }) {
   const supabase = createClient();
-
-  // GEÇİCİ TEŞHİS LOGLARI — signup akışı doğrulaması için, kalıcı değil.
-  // result.data.session ham haliyle BİLEREK loglanmıyor: access_token/
-  // refresh_token içeriyor, bunu Vercel log altyapısına düz metin yazmak
-  // o session'ı ele geçirmeye yeten bir kimlik bilgisini sızdırmak demek
-  // olurdu. Aynı teşhis değerini taşıyan, token içermeyen bir özet basılıyor.
-  console.log('START SIGNUP');
-  console.log({ email });
-  console.log('BEFORE SIGNUP');
-
-  const result = await supabase.auth.signUp({ email, password });
-
-  console.log('AFTER SIGNUP');
-  console.log({
-    hasError: !!result.error,
-    errorMessage: result.error?.message,
-    sessionExists: !!result.data?.session,
-    userId: result.data?.user?.id,
-    userConfirmed: result.data?.user?.email_confirmed_at,
-    identities: result.data?.user?.identities,
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password,
+    options: { data: { full_name: fullName } },
   });
 
-  const { data, error } = result;
-  if (error) return { error: error.message };
+  if (error) return { error: mapAuthErrorMessage(error.message) };
 
-  if (data.session) {
-    const { error: rpcError } = await supabase.rpc('register_school', {
-      p_name: okulAdi,
-      p_city: il,
-      p_district: ilce,
-      p_phone: phone,
-    });
-    if (rpcError) return { error: rpcError.message };
-    redirect('/dashboard');
+  // Supabase'in anti-enumeration deseni: e-posta zaten kayıtlı VE
+  // onaylıysa signUp() hata döndürmez, data.user.identities boş dizi
+  // gelir (aksi halde var olan hesapların e-postasını deneyerek "bu
+  // e-posta kayıtlı mı" bilgisi sızdırılabilirdi). Bu tek durumda
+  // kullanıcıya açıkça söylüyoruz — zaten kendi e-postası, sızıntı yok.
+  if (data.user && data.user.identities && data.user.identities.length === 0) {
+    return { error: 'Bu e-posta adresiyle zaten bir hesap var.' };
   }
 
-  return { ok: true, needsCode: true };
+  if (data.session) {
+    await supabase.auth.signOut();
+  }
+
+  return { ok: true };
 }
 
 export async function resendSignupCode(email) {
   const supabase = createClient();
   const { error } = await supabase.auth.resend({ type: 'signup', email });
-  if (error) return { error: error.message };
+  if (error) return { error: mapAuthErrorMessage(error.message) };
   return { ok: true };
 }
 
-export async function verifySignupCode({ email, code, okulAdi, il, ilce, phone }) {
+export async function verifySignupCode({ email, code, okulAdi, il, ilce, schoolType }) {
   const supabase = createClient();
 
   const { error: verifyError } = await supabase.auth.verifyOtp({ email, token: code, type: 'signup' });
-  if (verifyError) return { error: 'Kod hatalı veya süresi dolmuş: ' + verifyError.message };
+  if (verifyError) return { error: mapAuthErrorMessage(verifyError.message) };
 
   const { error: rpcError } = await supabase.rpc('register_school', {
     p_name: okulAdi,
     p_city: il,
     p_district: ilce,
-    p_phone: phone,
+    p_school_type: schoolType,
   });
-  if (rpcError) return { error: rpcError.message };
+  if (rpcError) return { error: sanitizeDbErrorMessage(rpcError.message) };
 
   redirect('/dashboard');
 }
