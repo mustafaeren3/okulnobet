@@ -2,19 +2,26 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Snowflake, PlayCircle, Crown, Ban, CalendarClock } from 'lucide-react';
+import { Snowflake, PlayCircle, Crown, Ban, CalendarClock, LogIn } from 'lucide-react';
 import { Button } from '../../../ui/button';
 import { Input } from '../../../ui/input';
 import { Label } from '../../../ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../../../ui/dialog';
 import { freeze, reopen, updateSubscription, extendTrial } from '../../../actions/subscriptions';
+import { startImpersonationAction } from '../../../actions/impersonation';
 
 // Her aksiyon zaten var olan, test edilmiş server action'ları çağırıyor
 // (bkz. app/super-admin/actions/subscriptions.js) — burada YENİ bir RPC/
 // mutasyon YOK, sadece shadcn Dialog ile "sebep" (reason) toplayıp
 // mevcut fonksiyonlara geçiyor. Hesap SİLME bilerek yok — service_role
 // key gerektiriyor, bu depoda yok.
+//
+// "impersonate" başarılı olunca startImpersonationAction() zaten
+// redirect('/dashboard') çağırıyor — Next.js server action'lardan gelen
+// redirect'i otomatik navigasyona çeviriyor, ayrı bir yönlendirme kodu
+// gerekmiyor (bkz. handleConfirm, res beklemeden akış zaten sayfayı değiştirir).
 const ACTIONS = {
+  impersonate: { label: 'Kullanıcı Olarak Giriş Yap', icon: LogIn, needsReason: true, run: (id, reason) => startImpersonationAction(id, reason) },
   freeze: { label: 'Hesabı Dondur', icon: Snowflake, needsReason: true, run: (id, reason) => freeze(id, reason) },
   reopen: { label: 'Hesabı Tekrar Aktif Et', icon: PlayCircle, needsReason: true, run: (id, reason) => reopen(id, reason) },
   makePremium: { label: 'Premium Yap', icon: Crown, needsReason: true, run: (id, reason) => updateSubscription(id, { status: 'active', planType: 'standard', reason }) },
@@ -43,13 +50,17 @@ export default function UserActions({ schoolId, status, isPremium }) {
     setBusy(true);
     setError('');
     const res = await action.run(schoolId, reason.trim(), days);
+    // impersonate başarılıysa action.run() içindeki redirect() bu satıra
+    // hiç dönmeden sayfayı değiştirir — res burada SADECE hata durumunda
+    // tanımlı olur.
     setBusy(false);
-    if (res.error) { setError(res.error); return; }
+    if (res?.error) { setError(res.error); return; }
     setOpenAction(null);
     router.refresh();
   }
 
   const buttons = [
+    'impersonate',
     status !== 'frozen' && 'freeze',
     status === 'frozen' && 'reopen',
     !isPremium && 'makePremium',
@@ -62,7 +73,7 @@ export default function UserActions({ schoolId, status, isPremium }) {
       {buttons.map((key) => {
         const { label, icon: Icon } = ACTIONS[key];
         return (
-          <Button key={key} variant="outline" className="justify-start" onClick={() => openDialog(key)}>
+          <Button key={key} variant={key === 'impersonate' ? 'default' : 'outline'} className="justify-start" onClick={() => openDialog(key)}>
             <Icon size={15} /> {label}
           </Button>
         );

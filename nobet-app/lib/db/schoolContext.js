@@ -3,6 +3,7 @@
 // buradan ulaşır, doğrudan Supabase sorgusu yazmaz (CLAUDE.md mimari
 // kural 2 — bu kural server action'lar için de geçerli, sadece
 // component/page değil).
+import { getActiveImpersonation } from './impersonation';
 
 export async function getSchoolForUser(supabase, userId) {
   // .single() değil .maybeSingle(): kullanıcının school_users satırı
@@ -15,12 +16,40 @@ export async function getSchoolForUser(supabase, userId) {
     .eq('user_id', userId)
     .maybeSingle();
   if (error) throw new Error(error.message);
-  if (!data) return null;
+  if (data) {
+    return {
+      schoolId: data.school_id,
+      schoolName: data.schools?.name,
+      principalName: data.schools?.profile?.principal_name || '',
+      assistantPrincipalName: data.schools?.profile?.assistant_principal_name || '',
+      isImpersonating: false,
+    };
+  }
+
+  // school_users'ta satırı yok — normal bir kullanıcı için bu "okula
+  // bağlı değil" demektir. Ama platform_admin AKTİF bir impersonation
+  // başlattıysa (bkz. lib/db/impersonation.js, migration 0035) hedef
+  // okulu döner — current_school_id() DB tarafında zaten AYNI kararı
+  // veriyor (RLS bunu bağımsızca doğruluyor, burası sadece dashboard'un
+  // HANGİ okulu göstereceğini/adını bilmesi için).
+  const impersonation = await getActiveImpersonation(supabase).catch(() => null);
+  if (!impersonation) return null;
+
+  const { data: schoolRow, error: schoolError } = await supabase
+    .from('schools')
+    .select('name, profile')
+    .eq('id', impersonation.target_school_id)
+    .maybeSingle();
+  if (schoolError) throw new Error(schoolError.message);
+
   return {
-    schoolId: data.school_id,
-    schoolName: data.schools?.name,
-    principalName: data.schools?.profile?.principal_name || '',
-    assistantPrincipalName: data.schools?.profile?.assistant_principal_name || '',
+    schoolId: impersonation.target_school_id,
+    schoolName: schoolRow?.name,
+    principalName: schoolRow?.profile?.principal_name || '',
+    assistantPrincipalName: schoolRow?.profile?.assistant_principal_name || '',
+    isImpersonating: true,
+    impersonatedOwnerEmail: impersonation.owner_email,
+    impersonatedOwnerFullName: impersonation.owner_full_name,
   };
 }
 

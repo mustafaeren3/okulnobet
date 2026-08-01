@@ -1,11 +1,14 @@
 import Link from 'next/link';
+import { LogIn } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
 import { requirePlatformAdmin, getPlatformSchoolsPage } from '@/lib/db/platformAdmin';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../../ui/card';
 import { Badge } from '../../ui/badge';
+import { Button } from '../../ui/button';
 import { DataTable } from '../../ui/data-table';
 import { PaginationBar } from '../../ui/pagination';
 import UserFilters from './UserFilters';
+import { startImpersonationAction } from '../../actions/impersonation';
 
 const STATUS_VARIANT = { active: 'success', past_due: 'warning', expired: 'destructive', cancelled: 'outline', frozen: 'destructive' };
 const STATUS_LABEL = { active: 'Aktif', past_due: 'Ödeme Gecikti', expired: 'Süresi Doldu', cancelled: 'İptal', frozen: 'Dondurulmuş' };
@@ -86,6 +89,16 @@ export default async function UsersPage({ searchParams }) {
     {
       key: 'status', header: 'Durum',
       cell: (r) => <Badge variant={STATUS_VARIANT[r.subscription_status] || 'outline'}>{STATUS_LABEL[r.subscription_status] || r.subscription_status || '—'}</Badge>,
+    },
+    {
+      key: 'impersonate', header: '',
+      cell: (r) => (
+        <form action={async () => { 'use server'; await startImpersonationAction(r.school_id, 'Kullanıcı listesinden giriş'); }}>
+          <Button type="submit" variant="outline" size="sm">
+            <LogIn size={13} /> Giriş Yap
+          </Button>
+        </form>
+      ),
     },
   ];
 

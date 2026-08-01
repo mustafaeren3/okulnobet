@@ -8,6 +8,7 @@ import { getActiveHardRuleKeys } from '@/lib/db/rules';
 import { getSubscriptionForSchool } from '@/lib/db/subscriptions';
 import { isPlatformAdmin } from '@/lib/db/platformAdmin';
 import Dashboard from './Dashboard';
+import ImpersonationBanner from './ImpersonationBanner';
 
 // Tek sayfa: kullanıcı "5 ayrı sayfa çok karmaşık, eski gibi tek sayfa
 // olsun" dedi. Bu sayfa artık tüm sekmelerin (Öğretmenler/Bölgeler/
@@ -19,16 +20,18 @@ export default async function DashboardPage() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect('/login');
 
-  // Savunma katmanı: platform_admins üyesi hangi yoldan /dashboard'a
-  // gelirse gelsin (geri tuşu, eski yer imi, elle URL yazma...) burada
-  // yakalanıp /super-admin'e yönlendirilir — "hiçbir koşulda" kuralı
-  // sadece login/anasayfa'daki yönlendirmelere güvenmiyor. Aynı
-  // isPlatformAdmin() kontrolü (bkz. lib/db/platformAdmin.js).
-  const isAdmin = await isPlatformAdmin(supabase).catch(() => false);
-  if (isAdmin) redirect('/super-admin');
-
+  // getSchoolForUser artık impersonation'a duyarlı (bkz.
+  // lib/db/schoolContext.js) — platform_admins üyesi AKTİF bir
+  // impersonation başlattıysa (bkz. app/super-admin/actions/impersonation.js)
+  // hedef okulu döner, aksi halde (normal kullanıcı gibi) null döner.
+  // SADECE null dönerse VE kullanıcı admin ise /super-admin'e atılır —
+  // "hiçbir koşulda /dashboard'a düşmesin" kuralı impersonation
+  // OLMADIĞI sürece aynen geçerli, tek fark admin bilerek impersonation
+  // başlattıysa artık buraya girebiliyor.
   const school = await getSchoolForUser(supabase, user.id);
   if (!school) {
+    const isAdmin = await isPlatformAdmin(supabase).catch(() => false);
+    if (isAdmin) redirect('/super-admin');
     return (
       <main style={{ maxWidth: 600, margin: '60px auto', fontFamily: 'sans-serif', padding: '0 16px' }}>
         <h1>Henüz bir okula bağlı değilsin.</h1>
@@ -46,16 +49,21 @@ export default async function DashboardPage() {
   ]);
 
   return (
-    <Dashboard
-      schoolName={school.schoolName}
-      initialPrincipalName={school.principalName}
-      initialAssistantPrincipalName={school.assistantPrincipalName}
-      initialTeachers={teachers}
-      initialZones={zones}
-      initialRotationMode={rotationMode}
-      initialHolidays={holidays}
-      initialActiveRuleKeys={[...activeRuleKeys]}
-      initialSubscription={subscription}
-    />
+    <>
+      {school.isImpersonating && (
+        <ImpersonationBanner label={school.impersonatedOwnerFullName || school.impersonatedOwnerEmail || school.schoolName} />
+      )}
+      <Dashboard
+        schoolName={school.schoolName}
+        initialPrincipalName={school.principalName}
+        initialAssistantPrincipalName={school.assistantPrincipalName}
+        initialTeachers={teachers}
+        initialZones={zones}
+        initialRotationMode={rotationMode}
+        initialHolidays={holidays}
+        initialActiveRuleKeys={[...activeRuleKeys]}
+        initialSubscription={subscription}
+      />
+    </>
   );
 }
