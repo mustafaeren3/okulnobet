@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 
 const NAV_ITEMS = [
   { href: '/super-admin', label: 'Genel Bakış', exact: true },
+  { href: '/super-admin/users', label: 'Kullanıcılar' },
   { href: '/super-admin/schools', label: 'Okullar' },
   { href: '/super-admin/subscriptions', label: 'Abonelikler' },
   { href: '/super-admin/payments', label: 'Ödemeler' },

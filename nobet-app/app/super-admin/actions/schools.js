@@ -1,5 +1,6 @@
 'use server';
 
+import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { requirePlatformAdmin, getPlatformSchools, getPlatformSchoolsPage, getSchoolDetail, addSchoolNote } from '@/lib/db/platformAdmin';
 
@@ -45,6 +46,8 @@ export async function submitSchoolNote(schoolId, note) {
   try {
     await requirePlatformAdmin(supabase);
     await addSchoolNote(supabase, schoolId, note);
+    revalidatePath(`/super-admin/schools/${schoolId}`);
+    revalidatePath(`/super-admin/users/${schoolId}`);
     return { ok: true };
   } catch (e) {
     return { error: e.message };

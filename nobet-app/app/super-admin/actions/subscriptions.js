@@ -19,6 +19,8 @@ export async function extendTrial(schoolId, days, reason) {
     await extendSchoolTrial(supabase, schoolId, days, reason);
     revalidatePath('/super-admin');
     revalidatePath(`/super-admin/schools/${schoolId}`);
+    revalidatePath('/super-admin/users');
+    revalidatePath(`/super-admin/users/${schoolId}`);
     return { ok: true };
   } catch (e) {
     return { error: e.message };
@@ -32,6 +34,8 @@ export async function updateSubscription(schoolId, patch) {
     await setSchoolSubscription(supabase, schoolId, patch);
     revalidatePath('/super-admin');
     revalidatePath(`/super-admin/schools/${schoolId}`);
+    revalidatePath('/super-admin/users');
+    revalidatePath(`/super-admin/users/${schoolId}`);
     return { ok: true };
   } catch (e) {
     return { error: e.message };
@@ -45,6 +49,8 @@ export async function freeze(schoolId, reason) {
     await freezeSchool(supabase, schoolId, reason);
     revalidatePath('/super-admin');
     revalidatePath(`/super-admin/schools/${schoolId}`);
+    revalidatePath('/super-admin/users');
+    revalidatePath(`/super-admin/users/${schoolId}`);
     return { ok: true };
   } catch (e) {
     return { error: e.message };
@@ -58,6 +64,8 @@ export async function reopen(schoolId, reason) {
     await reopenSchool(supabase, schoolId, reason);
     revalidatePath('/super-admin');
     revalidatePath(`/super-admin/schools/${schoolId}`);
+    revalidatePath('/super-admin/users');
+    revalidatePath(`/super-admin/users/${schoolId}`);
     return { ok: true };
   } catch (e) {
     return { error: e.message };
@@ -71,6 +79,8 @@ export async function cancel(schoolId, reason) {
     await cancelSubscription(supabase, schoolId, reason);
     revalidatePath('/super-admin');
     revalidatePath(`/super-admin/schools/${schoolId}`);
+    revalidatePath('/super-admin/users');
+    revalidatePath(`/super-admin/users/${schoolId}`);
     return { ok: true };
   } catch (e) {
     return { error: e.message };
@@ -84,6 +94,8 @@ export async function adjustQuota(schoolId, newQuota, reason) {
     await adjustFreeQuota(supabase, schoolId, newQuota, reason);
     revalidatePath('/super-admin');
     revalidatePath(`/super-admin/schools/${schoolId}`);
+    revalidatePath('/super-admin/users');
+    revalidatePath(`/super-admin/users/${schoolId}`);
     return { ok: true };
   } catch (e) {
     return { error: e.message };

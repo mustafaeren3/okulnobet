@@ -151,7 +151,7 @@ export async function getPlatformDashboardStats(supabase) {
 // Faz D — sunucu taraflı sayfalama/filtreleme (bkz. 0023_schools_pagination.sql).
 // Dönüş: her satırda total_count (window function) — istemci sayfa
 // sayısını buradan hesaplar, ayrı bir count sorgusu atmaz.
-export async function getPlatformSchoolsPage(supabase, { search, city, district, plan, status, sort, page, pageSize } = {}) {
+export async function getPlatformSchoolsPage(supabase, { search, city, district, plan, status, sort, page, pageSize, quickFilter } = {}) {
   return callRpc(supabase, 'platform_list_schools_page', {
     p_search: search || null,
     p_city: city || null,
@@ -161,6 +161,7 @@ export async function getPlatformSchoolsPage(supabase, { search, city, district,
     p_sort: sort || 'created_at_desc',
     p_page: page || 1,
     p_page_size: pageSize || 25,
+    p_quick_filter: quickFilter || null,
   });
 }
 

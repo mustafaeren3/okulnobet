@@ -2,7 +2,7 @@
 
 import {
   Users, UserPlus, CalendarPlus, CalendarRange, School, ClipboardList,
-  ClipboardCheck, CreditCard, Gift, AlertTriangle, GraduationCap, Activity,
+  ClipboardCheck, CreditCard, Gift, AlertTriangle, GraduationCap, Activity, LogIn,
 } from 'lucide-react';
 import {
   ResponsiveContainer, LineChart, Line, BarChart, Bar, PieChart, Pie, Cell,
@@ -29,18 +29,19 @@ export default function DashboardV2({ stats, successRate }) {
   return (
     <div className="flex flex-col gap-4">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
-        <StatCard icon={Users} label="Toplam Kullanıcı" value={stats.total_users} />
-        <StatCard icon={UserPlus} label="Bugün Kayıt" value={stats.signups_today} />
-        <StatCard icon={CalendarPlus} label="Son 7 Gün Kayıt" value={stats.signups_last_7_days} />
-        <StatCard icon={CalendarRange} label="Son 30 Gün Kayıt" value={stats.signups_last_30_days} />
-        <StatCard icon={School} label="Aktif Okul" value={stats.active_schools} hint={`/ ${stats.total_schools} toplam`} />
+        <StatCard icon={Users} label="Toplam Kullanıcı" value={stats.total_users} href="/super-admin/users" />
+        <StatCard icon={UserPlus} label="Bugün Kayıt" value={stats.signups_today} href="/super-admin/users?quick=today_signup" />
+        <StatCard icon={CalendarPlus} label="Son 7 Gün Kayıt" value={stats.signups_last_7_days} href="/super-admin/users?quick=week_signup" />
+        <StatCard icon={CalendarRange} label="Son 30 Gün Kayıt" value={stats.signups_last_30_days} href="/super-admin/users?quick=month_signup" />
+        <StatCard icon={School} label="Aktif Okul" value={stats.active_schools} hint={`/ ${stats.total_schools} toplam`} href="/super-admin/schools" />
         <StatCard icon={GraduationCap} label="Toplam Öğretmen" value={stats.total_teachers} />
         <StatCard icon={ClipboardList} label="Toplam Nöbet" value={stats.total_duty_assignments} />
         <StatCard icon={ClipboardCheck} label="Bugünkü Nöbet" value={stats.duty_assignments_today} />
-        <StatCard icon={CreditCard} label="Aktif Abonelik" value={stats.active_subscriptions} hint="standard + enterprise" />
-        <StatCard icon={Gift} label="Ücretsiz Plan" value={stats.free_plan_count} />
-        <StatCard icon={AlertTriangle} label="Süresi Dolan / Donuk" value={stats.expired_or_frozen_count} />
+        <StatCard icon={CreditCard} label="Aktif Abonelik" value={stats.active_subscriptions} hint="standard + enterprise" href="/super-admin/users?quick=premium" />
+        <StatCard icon={Gift} label="Ücretsiz Plan (Trial)" value={stats.free_plan_count} href="/super-admin/users?quick=trial" />
+        <StatCard icon={AlertTriangle} label="Süresi Dolan / Donuk" value={stats.expired_or_frozen_count} href="/super-admin/users?status=expired" />
         <StatCard icon={Activity} label="Sistem Durumu" value={successRate !== null ? `%${successRate}` : '—'} hint="üretim başarı oranı" />
+        <StatCard icon={LogIn} label="Son Giriş Yapanlar" value="→" hint="son girişe göre sırala" href="/super-admin/users?quick=recent_login" />
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">

@@ -1,12 +1,15 @@
+import Link from 'next/link';
 import { Card, CardContent } from './card';
 import { cn } from '../lib/utils';
 
 // Tüm dashboard özet kartları TEK bileşenden geçer — 12 farklı kart
 // için 12 kez aynı JSX'i tekrarlamak yerine (bkz. CLAUDE.md: kod
-// tekrarını azalt, section 18).
-export function StatCard({ icon: Icon, label, value, hint, className }) {
-  return (
-    <Card className={cn('transition-colors hover:border-primary/40', className)}>
+// tekrarını azalt, section 18). href verilirse kart tıklanabilir olur —
+// Kullanıcı Yönetimi'nde ilgili hazır filtreyle açılır (bkz.
+// lib/db/platformAdmin.js p_quick_filter, migration 0032).
+export function StatCard({ icon: Icon, label, value, hint, href, className }) {
+  const content = (
+    <Card className={cn('transition-colors', href && 'cursor-pointer hover:border-primary/40', className)}>
       <CardContent className="flex items-start justify-between p-4">
         <div>
           <div className="text-xs font-medium text-muted-foreground">{label}</div>
@@ -21,4 +24,5 @@ export function StatCard({ icon: Icon, label, value, hint, className }) {
       </CardContent>
     </Card>
   );
+  return href ? <Link href={href}>{content}</Link> : content;
 }
