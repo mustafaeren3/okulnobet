@@ -2,13 +2,15 @@
 
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
-import { requireSchoolId, setSchoolRotationMode, updateSchoolProfileFields } from '@/lib/db/schoolContext';
+import { requireSchoolId, setSchoolRotationMode, updateSchoolProfileFields, getPrintPreferences } from '@/lib/db/schoolContext';
 import { generateBulkSchedule } from '@/lib/db/bulkSchedule';
 import {
   getAssignmentsForRange,
   createManualAssignment,
   deleteAssignment,
   getEarliestAssignmentDate,
+  getYearlyDistribution,
+  swapAssignment,
 } from '@/lib/db/dutyAssignments';
 import { getTeachers } from '@/lib/db/teachers';
 import { getHolidays, upsertHolidays, deleteCalendarDay } from '@/lib/db/calendarDays';
@@ -16,6 +18,7 @@ import { ACADEMIC_YEAR_2026_2027_HOLIDAYS } from '@/lib/engine/holidays';
 import { requireCanGenerateSchedule, getSubscriptionForSchool } from '@/lib/db/subscriptions';
 import { createShare, removeShare } from '@/lib/db/scheduleShares';
 import { isPremium, canAccessFeature, FEATURES, getUnlockedMonthKey, isMonthUnlocked } from '@/lib/engine/access';
+import { buildYearlyDistribution } from '@/lib/engine/distribution';
 
 // Bu okulun "açık ay" referansı — hiç generate edilmemişse null.
 // Ücretsiz planda kilitli olmayan TEK ay budur, kaç kez yeniden
@@ -171,6 +174,59 @@ export async function fetchScheduleView(startDate, endDate) {
   }
 }
 
+// Yıllık Dağılım görünümünün veri kaynağı — okulun ürettiği TÜM aylardaki
+// atamaları birleştirip öğretmen bazında özet çıkarır (bkz. lib/engine/
+// distribution.js). Premium'e kilitli: ücretsiz plan zaten Program
+// sekmesinde tek bir ayı görebiliyor (Faz 9), yıllık görünüm bu sınırı
+// dolaşmasın diye aynı FEATURES.VIEW_HISTORY kilidini kullanır — kilitliyse
+// satır verisi hiç hesaplanmaz/gönderilmez.
+export async function fetchYearlyDistribution() {
+  const supabase = createClient();
+  try {
+    const schoolId = await requireSchoolId(supabase);
+    const subscription = await getSubscriptionForSchool(supabase, schoolId);
+    if (!canAccessFeature(subscription, FEATURES.VIEW_HISTORY)) {
+      return { locked: true };
+    }
+
+    const [monthlyCountRows, teachers] = await Promise.all([
+      getYearlyDistribution(supabase),
+      getTeachers(supabase, schoolId),
+    ]);
+    const monthlyCounts = monthlyCountRows.map((r) => ({
+      teacherId: r.teacher_id,
+      fullName: r.full_name || '(silinmiş öğretmen)',
+      monthKey: r.month_key,
+      count: r.duty_count,
+    }));
+    const distribution = buildYearlyDistribution(monthlyCounts, teachers.filter((t) => t.is_active));
+    return { distribution };
+  } catch (e) {
+    return { error: e.message };
+  }
+}
+
+// Yazdırma tercihi — schools.profile jsonb'de (updateSchoolProfileFields
+// deseniyle, bkz. lib/db/schoolContext.js principal_name/assistant_
+// principal_name). Bugün tek anahtar (assistantPrincipalColumnMode) ama
+// patch nesnesi genel tutulduğu için ileride başka bir yazdırma tercihi
+// eklenirse aynı fonksiyon yeniden kullanılır.
+export async function updatePrintPreferences(patch) {
+  const supabase = createClient();
+  try {
+    const schoolId = await requireSchoolId(supabase);
+    if (patch.assistantPrincipalColumnMode && !['same_table', 'separate_table'].includes(patch.assistantPrincipalColumnMode)) {
+      throw new Error('Geçersiz yazdırma tercihi.');
+    }
+    const current = await getPrintPreferences(supabase, schoolId);
+    await updateSchoolProfileFields(supabase, schoolId, { printPreferences: { ...current, ...patch } });
+    revalidatePath('/dashboard');
+    return { ok: true };
+  } catch (e) {
+    return { error: e.message };
+  }
+}
+
 // Paylaşım bağlantısı — Premium'e özel (bkz. FEATURES.SHARE_SCHEDULE).
 // DB seviyesindeki gerçek kontrol create_schedule_share SQL fonksiyonunda
 // tekrarlanıyor (savunma amaçlı); buradaki kontrol kullanıcıya erken ve
@@ -231,6 +287,23 @@ export async function removeAssignment(assignmentId) {
     await deleteAssignment(supabase, assignmentId);
     revalidatePath('/dashboard');
     return { ok: true };
+  } catch (e) {
+    return { error: e.message };
+  }
+}
+
+// "Değiştir" — TEK bir atomik RPC çağrısı (swap_duty_assignment, bkz.
+// supabase/migrations/0042). Kalite denetimi bulgusu: önceki hâli
+// removeAssignment + addManualAssignment iki ayrı istekti, ikincisi
+// başarısız olursa hücre boş kalıyordu. UI artık SADECE bu action'ı
+// çağırıyor (Dashboard.jsx handleChangeEntry).
+export async function changeAssignment(assignmentId, newTeacherId) {
+  const supabase = createClient();
+  try {
+    await requireSchoolId(supabase);
+    const row = await swapAssignment(supabase, assignmentId, newTeacherId);
+    revalidatePath('/dashboard');
+    return { row };
   } catch (e) {
     return { error: e.message };
   }

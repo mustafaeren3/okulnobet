@@ -7,6 +7,9 @@ import { getHolidays } from '@/lib/db/calendarDays';
 import { getActiveHardRuleKeys } from '@/lib/db/rules';
 import { getSubscriptionForSchool } from '@/lib/db/subscriptions';
 import { isPlatformAdmin } from '@/lib/db/platformAdmin';
+import { getAssistantPrincipals } from '@/lib/db/assistantPrincipals';
+import { getRotationSettings } from '@/lib/db/assistantPrincipalRotationSettings';
+import { logSecurityEvent } from '@/lib/db/systemEvents';
 import Dashboard from './Dashboard';
 import ImpersonationBanner from './ImpersonationBanner';
 
@@ -14,6 +17,20 @@ import ImpersonationBanner from './ImpersonationBanner';
 // olsun" dedi. Bu sayfa artık tüm sekmelerin (Öğretmenler/Bölgeler/
 // Program/Kurallar/Hesabım) ilk verisini burada tek seferde çekip
 // Dashboard'a (istemci taraflı sekme sarmalayıcısı) veriyor.
+
+// Kalite denetimi düzeltmesi: önceden Görevli Müdür Yardımcısı
+// sorgularındaki .catch(() => []) HER hatayı (RLS, ağ, beklenmeyen DB
+// hatası dahil) sessizce yutuyordu. Artık SADECE "migration henüz
+// uygulanmadı" durumunu (PostgREST'in "tabloyu şema önbelleğinde
+// bulamadım" hatası — 0037-0039 canlıya uygulanana kadar beklenen, geçici
+// bir durum) tanıyoruz; başka HERHANGİ bir hata sayfanın geri kalan 6
+// sorgusuyla AYNI şekilde davranır — yakalanmaz, sayfa çöker (Next.js'in
+// varsayılan hata sayfası). Sessizce boş veri göstermek, gerçek bir RLS/
+// yetki hatasını "AP modülü henüz kullanılmamış" gibi göstererek fark
+// edilmesini zorlaştırırdı.
+function isMissingTableError(error) {
+  return /schema cache/i.test(error?.message || '');
+}
 
 export default async function DashboardPage() {
   const supabase = createClient();
@@ -48,6 +65,28 @@ export default async function DashboardPage() {
     getSubscriptionForSchool(supabase, school.schoolId),
   ]);
 
+  let assistantPrincipals = [];
+  let apRotationSettings = { mode: 'sequential_daily', blockSizeDays: null };
+  try {
+    [assistantPrincipals, apRotationSettings] = await Promise.all([
+      getAssistantPrincipals(supabase, school.schoolId),
+      getRotationSettings(supabase, school.schoolId),
+    ]);
+  } catch (e) {
+    if (!isMissingTableError(e)) {
+      // Beklenmeyen hata (RLS/yetki/ağ/vb.) — sessizce yutulmaz: ayrıntı
+      // system_events'e yazılır (server log), sonra RETHROW edilir ki
+      // sayfa gerçekten hata versin (Next.js'in production'da ham hata
+      // mesajını istemciye sızdırmayan varsayılan davranışı devreye girer
+      // — kullanıcı boş/yanlış veri değil, bir hata durumu görür).
+      await logSecurityEvent(supabase, 'ap_module_unexpected_error', { message: e.message });
+      throw e;
+    }
+    // Beklenen geçiş durumu — ama ne zamana kadar sürdüğünü görebilmek
+    // için (migration ne zaman uygulandı unutulursa) kaydediliyor.
+    await logSecurityEvent(supabase, 'ap_module_tables_missing', { message: e.message });
+  }
+
   return (
     <>
       {school.isImpersonating && (
@@ -63,6 +102,9 @@ export default async function DashboardPage() {
         initialHolidays={holidays}
         initialActiveRuleKeys={[...activeRuleKeys]}
         initialSubscription={subscription}
+        initialAssistantPrincipals={assistantPrincipals}
+        initialAPRotationSettings={apRotationSettings}
+        initialPrintPreferences={school.printPreferences}
       />
     </>
   );

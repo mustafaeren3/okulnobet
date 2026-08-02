@@ -48,6 +48,16 @@ describe('tenant izolasyonu (RLS) — Faz 2 tabloları — gerçek Supabase proj
     await clientB.from('rotations').insert({ school_id: schoolIdB, teacher_id: teacherIdB });
     await clientB.from('exceptions').insert({ school_id: schoolIdB, teacher_id: teacherIdB, exception_type: 'rapor', start_date: '2026-10-01', end_date: '2026-10-02' });
     await clientB.from('duty_assignments').insert({ school_id: schoolIdB, teacher_id: teacherIdB, zone_id: zoneIdB, duty_date: '2026-10-06' });
+
+    // Görevli Müdür Yardımcısı modülü (0037-0039) — aynı RLS deseni.
+    const { data: apB, error: apErr } = await clientB
+      .from('assistant_principals')
+      .insert({ school_id: schoolIdB, full_name: 'ZZZ_TENANT_TEST_AP_B' })
+      .select()
+      .single();
+    if (apErr) throw new Error(`B okuluna assistant_principal eklenemedi: ${apErr.message}`);
+    await clientB.from('assistant_principal_rotation_settings').insert({ school_id: schoolIdB, mode: 'sequential_daily' });
+    await clientB.from('assistant_principal_assignments').insert({ school_id: schoolIdB, assistant_principal_id: apB.id, duty_date: '2026-10-06' });
   }, 30000);
 
   it.each([
@@ -61,6 +71,9 @@ describe('tenant izolasyonu (RLS) — Faz 2 tabloları — gerçek Supabase proj
     'rotations',
     'exceptions',
     'duty_assignments',
+    'assistant_principals',
+    'assistant_principal_rotation_settings',
+    'assistant_principal_assignments',
   ])('A, B okulunun %s verisini okuyamaz', async (table) => {
     const { data, error } = await clientA.from(table).select('*').eq('school_id', schoolIdB);
     expect(error).toBeNull();

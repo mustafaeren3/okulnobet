@@ -1,5 +1,153 @@
 # PHASE_REPORT.md
 
+## Faz 12.1 — Kalite denetimi düzeltmeleri (production'a alma öncesi)
+
+Faz 12 tamamlandıktan sonra kullanıcı isteğiyle yapılan bağımsız bir kalite
+denetimi 5 kritik risk buldu (bkz. denetim raporu, sohbet geçmişi). Bu faz
+SADECE o riskleri düzeltir — yeni özellik eklenmedi.
+
+### Düzeltilen riskler
+
+1. **Yıllık Dağılım'ın 1000 satır limiti** — `getAllAssignmentsForSchool` (ham
+   satır, tarih filtresiz) kaldırıldı. Yerine **`0040_yearly_distribution_rpc.sql`**:
+   `get_yearly_distribution()` — aggregasyon Postgres'te (öğretmen×ay
+   kırılımında `count(*)`), istemciye SADECE bu küçük, sınırlı sonuç kümesi
+   gidiyor — ham nöbet sayısından bağımsız. `lib/engine/distribution.js`
+   ön-aggregate girdi alacak şekilde yeniden yazıldı (davranış aynı,
+   girdi şekli değişti). **1000/2500/12000 satırlık gerçek verilerle
+   canlıda doğrulandı** (`tests/db/yearlyDistributionVolume.test.js`) —
+   ayrıca eski yaklaşımın bu hacimde GERÇEKTEN kesildiğini kanıtlayan bir
+   karşılaştırma testi de eklendi.
+2. **Eksik index'ler** — **`0041_assistant_principal_indexes.sql`**:
+   `assistant_principals.school_id`, `assistant_principal_assignments.
+   assistant_principal_id` — `0012_performance_indexes.sql`'in kendi
+   kaydettiği (öğretmen silmenin 4-5 saniye sürdüğü) hatanın AYNISI yeni
+   tablolarda tekrarlanmıştı.
+3. **Atomik olmayan "Değiştir"** — **`0042_atomic_swap_assignment.sql`**:
+   `swap_duty_assignment(assignment_id, new_teacher_id)` — sil+ekle TEK
+   transaction'da, yeni öğretmenin okula ait olduğu SQL içinde doğrulanıyor,
+   `for update` ile eşzamanlı isteklere karşı satır kilitleniyor. Bir
+   canlı-doğrulama turunda "column reference id is ambiguous" hatası
+   bulundu (RETURNS TABLE'ın `id` çıktı parametresiyle öneksiz sütun
+   referansı çakışıyordu) — **`0044`** ile düzeltildi (0042'nin dosyası
+   DEĞİŞTİRİLMEDİ, migration geçmişi asla elle düzenlenmez). UI artık TEK
+   `changeAssignment` action'ını çağırıyor.
+4. **AP modülünde kota kontrolü yoktu** — artık öğretmen programıyla AYNI
+   merkezi sayacı (`subscriptions.free_generation_quota/used`) paylaşıyor;
+   kontrol (`requireCanGenerateSchedule`) action katmanında, artırma motor
+   katmanında — `generateBulkSchedule` ile birebir aynı mimari. Süper
+   admin/dev muafiyeti `lib/db/subscriptions.js getSubscriptionForSchool`'un
+   TEK merkezi overlay'inden otomatik geliyor, yeni bir owner/admin if'i
+   eklenmedi. Ayrı ayrı tetiklenen üretimler (mevcut UI'da tek yol) ayrı
+   ayrı kota harcar — `tests/db/apQuotaSharing.test.js` + e2e test 13 bunu
+   iki yönde de (önce öğretmen sonra AP, önce AP sonra öğretmen) kanıtlıyor.
+5. **Tarih/hata borçları**: `AssistantPrincipalSection.jsx`'teki elle
+   `new Date(string)` döngüsü `eachDateStr`'a çevrildi. `page.jsx`'teki
+   geniş `.catch(() => [])` daraltıldı — SADECE "tablo yok" (migration
+   henüz uygulanmadı, `schema cache` hatası) yutuluyor ve `system_events`'e
+   loglanıyor, başka HER hata rethrow ediliyor. `block_size_days`'e DB
+   CHECK constraint (1-90, **`0043`**) + action katmanı doğrulaması eklendi.
+   Manuel AP atamasında (`personId`) ve öğretmen atamasında (`teacherId`/
+   `zoneId`) okul sahipliği artık **`lib/db/ownership.js`** ortak
+   yardımcısıyla insert'ten önce doğrulanıyor (üçüncü somut kullanımda
+   paylaşılan fonksiyona çıkarıldı).
+
+### Test kapsamı (bu faz)
+
+`tests/db/atomicSwap.test.js` (3, atomik değişim + rollback kanıtı),
+`tests/db/yearlyDistributionVolume.test.js` (4, 1000/2500/12000 satır +
+naif-karşılaştırma), `tests/db/apQuotaSharing.test.js` (3, paylaşılan kota
+iki yönde), `tests/db/manualAssignment.test.js`/`assistantPrincipals.test.js`
+genişletildi (çapraz-okul id reddi, block_size_days sınırı). **`vitest run
+tests/unit`: 122/122.** İzole çalıştırıldığında (Supabase signup rate
+limitine takılmadan) tüm yeni/değişen db testleri **yeşil** — tam
+`tests/db` paketinin TEK seferde (40+ signup) koşulması Supabase'in
+signup rate limitine takılıyor (önceki fazlarda da not edilen, koddan
+bağımsız bir altyapı kısıtı).
+
+`tests/e2e/apModuleAndProgram.spec.js` (yeni, 15 test) — gerçek
+`next build && next start` production build'ine karşı, gerçek tarayıcı,
+sentetik `ZZZ_E2E_TEST_` okul/öğretmen/AP verisiyle, gerçek `/login`
+formu üzerinden oturum açarak: manuel öğretmen ekleme, AP ekleme +
+haftalık dönüşüm ayarı, Program Oluştur (tatil/hafta sonu davranışı),
+hover-add, tek tık popover→Kaldır, çift tık→Değiştir, ESC, Aylık/Yıllık
+Dağılım, **ücretsiz planda Yıllık Dağılım'ın GERÇEKTEN Premium ekranı
+açtığı**, **AP üretiminin paylaşılan kota tükenince GERÇEKTEN reddedildiği**,
+Word/Yazdır'ın ücretsiz planda Premium kilidini açtığı. **15/15 yeşil.**
+(Word/Yazdır'ın gerçek İÇERİĞİ premium bir hesap gerektirdiği için uçtan
+uca doğrulanamadı — "aynı kaynak HTML" iddiası statik kod incelemesiyle
+kanıtlandı: `buildScheduleDocumentHtml` repo'da tek yerde tanımlı, hem
+`exportHTML` hem `printSchedule` SADECE onu çağırıyor.)
+
+### Production'a alma
+
+Migration `0037`-`0044` **canlı Supabase projesine (`supabase db push
+--linked`) uygulandı**, `supabase db query --linked` ile tablo/RPC/index/
+constraint varlığı doğrulandı. `EXPLAIN` ile index'lerin planlayıcı
+tarafından tanındığı doğrulandı (tablolar şu an küçük olduğu için
+Postgres bilinçli olarak Seq Scan seçiyor — beklenen/doğru davranış,
+tablo büyüdükçe index kullanılacak).
+
+### Kalan gerçek riskler
+
+1. **Word/Yazdır içerik-eşitliği premium bir hesapla uçtan uca
+   doğrulanmadı** — statik kod kanıtı güçlü ama canlı bir görsel/indirilen
+   dosya karşılaştırması yapılmadı.
+2. **AP kişi id'si + teacher/zone id doğrulaması artık var ama sadece
+   MANUEL atama yollarında** — toplu üretim motorunun kendi iç verisi
+   zaten güvenilir kaynaktan geldiği için dokunulmadı (bilinçli, gereksiz).
+3. **Tam `tests/db` paketi tek seferde Supabase rate limitine takılıyor** —
+   CI'da bu paket çalıştırılacaksa ya sıralı/yavaşlatılmış ya da ayrı
+   Supabase test projesi gerekecek (bu fazın kapsamı dışında, önceki
+   fazlarda da not edilmiş bir altyapı borcu).
+
+---
+
+## Faz 12 — Yıllık Dağılım, Görevli Müdür Yardımcısı modülü, yazdırma birleştirme, Program tasarımı
+
+Kullanıcı isteği: (1) Dağılım ekranına Aylık/Yıllık toggle; (2) Program
+ekranının etkileşim/görsel yeniden tasarımı (hover-add, X'siz kartlar,
+popover menü, kompakt satırlar); (3) yeni, öğretmen nöbetinden bağımsız
+"Görevli Müdür Yardımcısı" modülü (3 dönüşüm tipi); (4) Yazdır'ın artık
+Word çıktısıyla AYNI belgeyi basması (tek kaynak); (5) genel tasarım
+sadeleştirme geçişi.
+
+### Tamamlanan
+
+1. **`lib/engine/assistantPrincipalRotation.js`** + **`lib/engine/distribution.js`** (yeni, saf) — sırasıyla üç dönüşüm modu (sequential_daily/weekly_block/n_day_block, hepsi zaten filtrelenmiş `dates` alır, tatil/hafta sonu mantığını tekrarlamaz) ve yıllık dağılım aggregasyonu. `rotation.js`'e (öğretmen motoru) DOKUNULMADI — paralel, ayrı dosyalar.
+2. **`0037`-`0039`** (yeni migration'lar) — `assistant_principals`/`assistant_principal_rotation_settings`/`assistant_principal_assignments`, `teachers`/`duty_zones`/`duty_assignments` (0004/0009) ile birebir aynı RLS deseni. Yeni `lib/db/assistantPrincipal*.js` (CRUD + `generateAssistantPrincipalSchedule` — çapadan "replay" ile devam eden rotasyon, öğretmen motorunun "tatilde sıra dönmez" ilkesiyle aynı).
+3. **Dağılım**: `DistributionTab.jsx` (yeni, Dashboard.jsx'ten çıkarıldı) — Aylık (değişmedi) / Yıllık (Premium'e kilitli, `fetchYearlyDistribution` server action, `lib/engine/distribution.js`).
+4. **Görevli Müdür Yardımcısı UI**: `AssistantPrincipalSettings.jsx` (Ayarlar'da CRUD + dönüşüm ayarı), `AssistantPrincipalSection.jsx` (Program'da ayrı bölüm, aynı görüntülenen tarih aralığını paylaşır).
+5. **Yazdırma birleştirme**: `scheduleDocument.js` — `buildScheduleDocumentHtml` TEK fonksiyonu hem Word indirmeyi (`exportHTML`) hem Yazdır'ı (artık gizli `<iframe>` + `contentWindow.print()`, `window.print()` DEĞİL) besliyor. Ayarlar'a "Yazdırma Tercihleri" kartı (`schools.profile.printPreferences.assistantPrincipalColumnMode` — aynı tabloda ek sütun / ayrı tablo, yeni migration gerekmedi, mevcut `profile` jsonb).
+6. **Program tasarımı**: `SchedulePopover.jsx` (yeni, tek paylaşılan bileşen — ekleme/değiştirme/silme hepsi bunu kullanır, ESC/Enter/Yukarı-Aşağı klavye desteği). `ScheduleCell` yeniden yazıldı: boş hücrede hover'da küçük "+", dolu hücrede X YOK — tek tık popover (Değiştir/Kaldır), çift tık doğrudan Değiştir. `dashboard.css`'te satır/kart yoğunluğu sıkılaştırıldı (padding/font/stat-card), `@media print` bloğu kaldırıldı (artık ekranı değil iframe'i basıyoruz).
+
+### Teknik borç / bilinçli kısayollar
+
+- **`n_day_block` rotasyonunun "resume" hesaplaması** (bloğun kaçıncı gününde olduğu) DB'den trailing-assignment sayarak yeniden kuruluyor (`countTrailingAssignmentsForPerson`) — öğretmen motorunun ROTATION_LOOKBACK_WEEKS'lik "grid healing" karmaşıklığı YOK, çünkü bu modülün deseni (düz liste) buna ihtiyaç duymuyor. Uç durum: bir kişi elle (is_manual) ATANMIŞSA trailing sayım onu da "otomatik" gibi sayar — düşük risk, gelecekte gerekirse ayrılabilir.
+- **Program ekranındaki AP bölümünün görünümü, yazdırma tercihine (aynı tablo/ayrı tablo) henüz BAĞLANMADI** — kullanıcı bunu "ileride kullanılmak üzere mimari hazır olsun" diye bilerek bu fazın dışında bıraktı; `AssistantPrincipalSection` veriyi prop olarak alacak şekilde tasarlandı, bağlamak ileride küçük bir değişiklik.
+- **AP kişi sırası** `created_at`'e göre sabit (drag-drop yeniden sıralama YOK) — `duty_zones` ile aynı konvansiyon, v1 kapsamı.
+
+### Test kapsamı
+
+- `tests/unit/assistantPrincipalRotation.test.js` (11 test, 3 mod × geçer/eler + tatil-boşluğu senaryosu), `tests/unit/distribution.test.js` (3 test). **`vitest run tests/unit`: 121/121 yeşil.**
+- `tests/db/assistantPrincipals.test.js`, `tests/db/assistantPrincipalSchedule.test.js` (yeni), `tests/db/tenant-isolation-phase2.test.js` genişletildi (3 yeni tablo). Migration `0037`-`0039` canlıya UYGULANMADIĞI için bu turda "relation does not exist" ile bekliyor (önceki her fazdaki aynı durum) — kod DB'ye doğru ulaşıyor, sadece tablo yok.
+- `npm run build`: temiz derleme, `/dashboard` route (26.5kB) dahil.
+- Tarayıcıda `/login`/`/signup` konsol hatasız doğrulandı (signup akışı e-posta onay adımına kadar sorunsuz ilerledi). **`/dashboard`'a gerçek girişle (e-posta OTP + migration sonrası veriyle) uçtan uca doğrulama bu turda YAPILAMADI** — e-posta kutusuna erişim yok, migration'lar henüz canlı değil. Kullanıcının aşağıdaki adımlarla doğrulaması gerekiyor.
+
+### Kullanıcının yapması gerekenler
+
+1. **`0037`, `0038`, `0039` migration'larını sırayla** Supabase SQL Editor'de çalıştır.
+2. Migration sonrası `npx vitest run tests/db` ile doğrula.
+3. `/dashboard`'da: Ayarlar'dan görevli müdür yardımcısı ekle + dönüşüm tipi seç → Program'da "Oluştur" → ayrı bölümün doğru göründüğünü kontrol et → Dağılım'da Yıllık'a geç → Ayarlar'dan yazdırma tercihini değiştirip Yazdır/Word İndir'in aynı içeriği ürettiğini karşılaştır → Program tablosunda hover/tek tık/çift tık/klavye etkileşimlerini dene.
+
+### Sonraki faz riskleri
+
+1. **Migration'lar uygulanana kadar yeni modülün hiçbir davranışı canlıda doğrulanamaz** — azaltma: yukarıdaki adım 1.
+2. **AP bölümünün ekran görünümü ile yazdırma tercihi arasındaki bağlantı henüz yok** — bir sonraki küçük fazda `AssistantPrincipalSection`'a `printPreferences` prop'u geçirilerek tamamlanabilir.
+3. **Program tablosunun yeni popover/hover etkileşimleri gerçek kullanıcı verisiyle uçtan uca görsel doğrulanamadı** (bu oturumda giriş yapılamadı) — kullanıcının adım 3'teki manuel kontrolü gerekiyor.
+
+---
+
 ## Faz 11 — Süper Admin Paneli v2 (profesyonel, MFA zorunlu, denetim izli SaaS yönetim paneli)
 
 ### Canlıya uygulama sonrası doğrulama (migration'lar `supabase db push` ile uygulandıktan sonra)

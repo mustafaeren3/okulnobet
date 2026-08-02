@@ -14,6 +14,7 @@ const REASON_MESSAGES = {
   history: 'Geçmiş programları / özel tarih aralığını görüntülemek Premium\'e özel.',
   share: 'Programı paylaşmak Premium\'e özel.',
   regenerate: 'Ücretsiz planda yalnızca 1 program oluşturabilirsin.',
+  yearly: 'Yıllık Dağılım görünümü Premium\'e özel.',
   account: 'Hesabım sayfasından yükseltme talebi gönderiyorsun.',
 };
 

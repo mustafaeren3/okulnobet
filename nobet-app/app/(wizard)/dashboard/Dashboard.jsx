@@ -7,6 +7,7 @@ import {
   Settings, Calendar, BarChart3, User, Users, MapPin, Lightbulb, School,
   CalendarDays, AlertTriangle, Flag, Scale, Puzzle, Crown, Check, Sparkles,
   Eye, Lock, CheckCircle2, Download, FileText, Link2, Printer, Timer, PartyPopper, X,
+  Pencil, Trash2,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { getWeekStart } from '@/lib/engine/rotation';
@@ -36,14 +37,23 @@ import {
   fetchTeacherOptions,
   addManualAssignment,
   removeAssignment,
+  changeAssignment,
   addHoliday,
   removeHoliday,
   loadDefaultHolidays,
   createShareLink,
   removeShareLink,
+  updatePrintPreferences,
 } from '../schedule/actions';
 import { toggleRule } from '../rules/actions';
 import PremiumScreen from './PremiumScreen';
+import DistributionTab from './DistributionTab';
+import AssistantPrincipalSettings from './AssistantPrincipalSettings';
+import AssistantPrincipalSection from './AssistantPrincipalSection';
+import { colorForName, luminance, formatDate } from './colorUtils';
+import { buildScheduleDocumentHtml } from './scheduleDocument';
+import SchedulePopover from './SchedulePopover';
+import { fetchAssistantPrincipalSchedule } from '../assistant-principal-schedule/actions';
 import Logo from '../../components/Logo';
 import EmptyState from '../../components/EmptyState';
 import Badge from '../../components/Badge';
@@ -98,45 +108,6 @@ const ROTATION_MODE_DESCRIPTIONS = {
     'Öğretmen her ay hem FARKLI bir yerde hem FARKLI bir günde nöbet tutar. Yerler döngüye göre değiştiği gibi, günler de haftanın günlerine göre sırayla döner. ' +
     'Örnek: Eylül\'de Pazartesi A Blok, Ekim\'de Salı B Blok, Kasım\'da Çarşamba C Blok şeklinde hem yer hem gün birlikte ilerler.',
 };
-
-// Resmi nöbet çizelgesi çıktısında sabit metin olarak basılır (MEB
-// okullarında yaygın kullanılan standart nöbetçi öğretmen görev tanımı).
-const DUTY_TEACHER_RESPONSIBILITIES = [
-  'Nöbet görevi ders başlangıç saatinden 15 dakika önce başlar. Ders bitiminden 15 dakika sonra biter. Öğretmen nöbet günlerinde bu kurala riayet ederek görevine gelir.',
-  'Okulun eğitim, öğretim ve yönetim işlerinin düzenli yürütülmesinde okul yöneticilerine yardımcı olur, öğrencilerin problemleri ile ilgilenerek gerekli yardımlarda bulunur.',
-  'Okulun günlük havalandırma, ısıtma ve temizlik işlerinin zamanında yapılıp yapılmadığını kontrol eder, eksiklerin giderilmesi için gerekli tedbirleri alır.',
-  'Bayrak törenlerinin zamanında gereken önemin verilerek yapılmasını sağlar.',
-  'Nöbetçi müdür yardımcısı ile işbirliği içerisinde boş derslerin doldurulması, yoklamaların alınmasına yardımcı olur.',
-  'Teneffüslerde öğrencilerin derslere zamanında ve güvenli şekilde girip çıkmaları için gerekli tedbirleri alır.',
-  'Okula gelen ve giden ziyaretçileri kontrol eder ve durumlarıyla ilgilenir.',
-  'Okul idaresince verilen eğitim ve öğretim ile ilgili görevleri yapar.',
-];
-
-// Eski tasarımın renk paleti + parlaklık hesabı (lib/engine/schedule.js
-// Faz 7.1'de kaldırıldı — eski staff.color sütununa dayanıyordu, yeni
-// teachers tablosunda böyle bir sütun yok). Öğretmen adına göre kalıcı
-// bir renk üretmek için isim hash'lenir — DB'de saklanmaz, salt görsel.
-const PALETTE = [
-  '4472C4', 'ED7D31', 'A9D18E', 'FF6666', '00B0F0', 'D4C400', '00B050',
-  '9966CC', 'FF8533', '9999FF', 'E05252', '00CCCC', '339966', 'D4A300',
-  '999999', '843C0C', '4C8C5C', '2E75B6', 'FF69B4', 'E040FB', '26A69A',
-  'F06292', '8D6E63', '78909C', 'D4E157', 'FF7043', '5C6BC0', 'AB47BC',
-];
-function colorForName(name) {
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) | 0;
-  return PALETTE[Math.abs(hash) % PALETTE.length];
-}
-function luminance(hex) {
-  const r = parseInt(hex.slice(0, 2), 16);
-  const g = parseInt(hex.slice(2, 4), 16);
-  const b = parseInt(hex.slice(4, 6), 16);
-  return 0.299 * r + 0.587 * g + 0.114 * b;
-}
-function formatDate(ymd) {
-  const [y, m, d] = ymd.split('-');
-  return `${d}/${m}/${y}`;
-}
 
 // Yazdırma çıktısı document.write ile ham HTML olarak kuruluyor —
 // öğretmen adı/tatil açıklaması/okul adı gibi kullanıcı girdisi metinler
@@ -228,34 +199,68 @@ function buildExportGrid(table, holidaysByDate) {
   return { header, rows };
 }
 
+// Boş hücrede hover'da küçük bir "+" belirir (JS state gerekmez, saf CSS
+// :hover/:focus-within — bkz. dashboard.css .td-empty). Dolu hücrede X
+// artık HİÇ görünmez: karta TEK tıklama küçük bir işlem menüsü açar
+// (Değiştir/Kaldır), çift tıklama doğrudan Değiştir'i tetikler. Tüm
+// seçim/işlem pencereleri SchedulePopover üzerinden — aynı tasarım dili,
+// aynı klavye desteği (ESC/Enter/Yukarı-Aşağı).
 function ScheduleCell({ date, zoneId, entries, teacherOptions, onRefresh }) {
-  const [adding, setAdding] = useState(false);
-  const [selectedTeacherId, setSelectedTeacherId] = useState('');
+  const [addOpen, setAddOpen] = useState(false);
+  const [openEntryId, setOpenEntryId] = useState(null);
+  const [openEntryMode, setOpenEntryMode] = useState('actions'); // 'actions' | 'picker'
   const [busy, setBusy] = useState(false);
 
-  async function handleRemove(assignmentId) {
+  const teacherItems = teacherOptions.map((t) => ({ key: t.id, label: t.full_name }));
+
+  async function handleAddPick(item) {
     setBusy(true);
-    const res = await removeAssignment(assignmentId);
+    const res = await addManualAssignment({ teacherId: item.key, zoneId, date });
     setBusy(false);
+    setAddOpen(false);
     if (res.error) { window.alert(res.error); return; }
     onRefresh();
   }
 
-  async function handleAdd() {
-    if (!selectedTeacherId) return;
+  async function handleRemoveEntry(entryId) {
     setBusy(true);
-    const res = await addManualAssignment({ teacherId: selectedTeacherId, zoneId, date });
+    const res = await removeAssignment(entryId);
     setBusy(false);
+    setOpenEntryId(null);
     if (res.error) { window.alert(res.error); return; }
-    setAdding(false);
-    setSelectedTeacherId('');
     onRefresh();
   }
 
-  if (!entries.length && !adding) {
+  // "Değiştir" — TEK atomik server action (changeAssignment →
+  // swap_duty_assignment RPC, bkz. supabase/migrations/0042). Kalite
+  // denetimi bulgusu: önceki remove+add iki-istekli akışta ikinci istek
+  // başarısız olursa hücre boş kalıyordu — artık ya TÜMÜYLE uygulanır ya
+  // hiç uygulanmaz (DB tarafında tek transaction), eski atama asla
+  // sessizce kaybolmaz.
+  async function handleChangeEntry(entryId, newTeacherId) {
+    setBusy(true);
+    const res = await changeAssignment(entryId, newTeacherId);
+    setBusy(false);
+    setOpenEntryId(null);
+    if (res.error) { window.alert(res.error); return; }
+    onRefresh();
+  }
+
+  if (!entries.length) {
     return (
       <td className="td-empty">
-        <button className="cell-add-btn" onClick={() => setAdding(true)}>+</button>
+        <div className="cell-hover-target">
+          <button className="cell-add-btn-ghost" onClick={() => setAddOpen(true)} aria-label="Öğretmen ekle" disabled={busy}>+</button>
+          {addOpen && (
+            <SchedulePopover
+              mode="picker"
+              items={teacherItems}
+              emptyLabel="Öğretmen bulunamadı"
+              onSelect={handleAddPick}
+              onClose={() => setAddOpen(false)}
+            />
+          )}
+        </div>
       </td>
     );
   }
@@ -265,27 +270,44 @@ function ScheduleCell({ date, zoneId, entries, teacherOptions, onRefresh }) {
       {entries.map((e) => {
         const color = colorForName(e.name);
         return (
-          <div key={e.id} className="cell-person" style={{ background: `#${color}`, color: luminance(color) > 140 ? '#000' : '#fff' }}>
-            {e.name}
-            {e.isManual && <span title="Elle düzenlendi (kilitli)"><Lock size={11} /></span>}
-            <button disabled={busy} onClick={() => handleRemove(e.id)} aria-label="Kaldır"><X size={12} /></button>
+          <div key={e.id} className="cell-person-wrap">
+            <div
+              className="cell-person"
+              style={{ background: `#${color}`, color: luminance(color) > 140 ? '#000' : '#fff' }}
+              role="button"
+              tabIndex={0}
+              onClick={() => { setOpenEntryId(e.id); setOpenEntryMode('actions'); }}
+              onDoubleClick={() => { setOpenEntryId(e.id); setOpenEntryMode('picker'); }}
+              onKeyDown={(ev) => {
+                if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); setOpenEntryId(e.id); setOpenEntryMode('actions'); }
+              }}
+            >
+              {e.name}
+              {e.isManual && <span title="Elle düzenlendi (kilitli)"><Lock size={11} /></span>}
+            </div>
+            {openEntryId === e.id && openEntryMode === 'actions' && (
+              <SchedulePopover
+                mode="actions"
+                items={[
+                  { key: 'edit', label: 'Değiştir', icon: Pencil },
+                  { key: 'remove', label: 'Kaldır', icon: Trash2, danger: true },
+                ]}
+                onSelect={(item) => (item.key === 'remove' ? handleRemoveEntry(e.id) : setOpenEntryMode('picker'))}
+                onClose={() => setOpenEntryId(null)}
+              />
+            )}
+            {openEntryId === e.id && openEntryMode === 'picker' && (
+              <SchedulePopover
+                mode="picker"
+                items={teacherItems}
+                emptyLabel="Öğretmen bulunamadı"
+                onSelect={(item) => handleChangeEntry(e.id, item.key)}
+                onClose={() => setOpenEntryId(null)}
+              />
+            )}
           </div>
         );
       })}
-      {adding ? (
-        <div className="cell-add-row">
-          <select value={selectedTeacherId} onChange={(ev) => setSelectedTeacherId(ev.target.value)}>
-            <option value="">Öğretmen seç...</option>
-            {teacherOptions.map((t) => (
-              <option key={t.id} value={t.id}>{t.full_name}</option>
-            ))}
-          </select>
-          <button disabled={busy || !selectedTeacherId} onClick={handleAdd} aria-label="Ekle"><Check size={12} /></button>
-          <button disabled={busy} onClick={() => setAdding(false)} aria-label="Vazgeç"><X size={12} /></button>
-        </div>
-      ) : (
-        <button className="cell-add-btn" onClick={() => setAdding(true)}>+</button>
-      )}
     </td>
   );
 }
@@ -348,6 +370,9 @@ export default function Dashboard({
   initialSubscription,
   initialPrincipalName,
   initialAssistantPrincipalName,
+  initialAssistantPrincipals,
+  initialAPRotationSettings,
+  initialPrintPreferences,
 }) {
   const supabase = useMemo(() => createClient(), []);
   const router = useRouter();
@@ -630,6 +655,19 @@ export default function Dashboard({
   const [savingPrincipal, setSavingPrincipal] = useState(false);
   const [assistantPrincipalName, setAssistantPrincipalName] = useState(initialAssistantPrincipalName || '');
   const [savingAssistantPrincipal, setSavingAssistantPrincipal] = useState(false);
+  const [printPreferences, setPrintPreferences] = useState(initialPrintPreferences || { assistantPrincipalColumnMode: 'same_table' });
+  const [savingPrintPreferences, setSavingPrintPreferences] = useState(false);
+
+  async function handleChangePrintPreference(e) {
+    const mode = e.target.value;
+    const previous = printPreferences;
+    setPrintPreferences({ ...printPreferences, assistantPrincipalColumnMode: mode });
+    setSavingPrintPreferences(true);
+    const res = await updatePrintPreferences({ assistantPrincipalColumnMode: mode });
+    setSavingPrintPreferences(false);
+    if (res.error) { setPrintPreferences(previous); showToast(res.error, true); return; }
+    showToast('Yazdırma tercihi kaydedildi ✓');
+  }
   const [holidays, setHolidays] = useState(initialHolidays || []);
   const [holidayDate, setHolidayDate] = useState('');
   const [holidayDesc, setHolidayDesc] = useState('');
@@ -844,7 +882,6 @@ export default function Dashboard({
     list.sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, 'tr'));
     return list;
   }, [rows]);
-  const maxCount = Math.max(...distribution.map((d) => d.count), 1);
 
   // ── EXPORT ───────────────────────────────────────────────
   function exportCSV() {
@@ -867,109 +904,45 @@ export default function Dashboard({
     showToast('CSV indirildi');
   }
 
-  // Resmi MEB tarzı "Öğretmen Nöbet Çizelgesi" belgesi: her hafta ayrı bir
-  // tablo (satır=nöbet yeri/bölge, sütun=haftanın günü — kullanıcının
-  // örnek belgesiyle birebir aynı yerleşim), altında geçerlilik tarihi,
-  // sabit "Nöbetçi Öğretmenin Görevleri" listesi ve okul müdürünün adının
-  // otomatik dolduğu imza bloğu. .doc uzantısıyla indirilir — Word bunu
-  // doğrudan açar ve TAMAMEN düzenlenebilir (gerçek bir .docx üretmek için
-  // ayrı bir kütüphane gerekmez, Word HTML içeriği native olarak okur).
-  function exportHTML() {
-    if (!canAccessFeature(initialSubscription, FEATURES.EXPORT_WORD)) { setPremiumPrompt('export'); return; }
-    if (!table.dates.length) return;
+  // Resmi MEB tarzı "Öğretmen Nöbet Çizelgesi" belgesi — HTML üretimi
+  // scheduleDocument.js'teki TEK paylaşılan fonksiyonda (buildScheduleDocumentHtml):
+  // Word indirme (exportHTML) VE Yazdır (printSchedule) AYNI belgeyi üretir,
+  // iki farklı çıktı riski kalmaz (kullanıcı isteği). Görevli Müdür
+  // Yardımcısı modülü kullanılıyorsa (bkz. AssistantPrincipalSection),
+  // Ayarlar'daki tercihe göre (printPreferences.assistantPrincipalColumnMode)
+  // aynı tabloda ek sütun veya ayrı bir tablo olarak eklenir.
+  async function buildDocumentHtmlForCurrentView() {
     const today = new Date();
     const todayStr = `${String(today.getDate()).padStart(2, '0')}.${String(today.getMonth() + 1).padStart(2, '0')}.${today.getFullYear()}`;
 
-    const weekBlocks = weeks
-      .map((wk, wi) => {
-        const dayHeaderCells = wk
-          .map((date) => `<th>${escapeHtml(DAY_TR[getWeekday(date)].toUpperCase())}</th>`)
-          .join('');
-        const zoneRows = table.zoneNames
-          .map((zone) => {
-            const cells = wk
-              .map((date) => {
-                const holidayDesc = holidaysByDate.get(date);
-                if (holidayDesc !== undefined) {
-                  return `<td class="td-holiday">${escapeHtml(holidayDesc || 'Tatil')}</td>`;
-                }
-                const entries = table.cellMap[date]?.[zone] || [];
-                return `<td>${entries.length ? escapeHtml(entries.map((e) => e.name).join(', ')) : '—'}</td>`;
-              })
-              .join('');
-            return `<tr><td class="td-zone">${escapeHtml(zone)}</td>${cells}</tr>`;
-          })
-          .join('');
+    let assistantPrincipalRowsByDate;
+    if (viewedRange) {
+      const apRes = await fetchAssistantPrincipalSchedule(viewedRange.start, viewedRange.end);
+      if (!apRes.error && apRes.rows?.length) {
+        assistantPrincipalRowsByDate = new Map(apRes.rows.map((r) => [r.duty_date, r.assistant_principals?.full_name]).filter(([, name]) => name));
+      }
+    }
 
-        return `
-    <div class="week-block${wi > 0 ? ' page-break' : ''}">
-      <table class="sched">
-        <thead><tr><th>NÖBET YERİ</th>${dayHeaderCells}</tr></thead>
-        <tbody>${zoneRows}</tbody>
-      </table>
-      <div class="validity">${formatDate(wk[0])} – ${formatDate(wk[wk.length - 1])} tarihleri arası geçerlidir.</div>
-    </div>`;
-      })
-      .join('');
+    return buildScheduleDocumentHtml({
+      schoolName,
+      weeks,
+      table,
+      holidaysByDate,
+      principalName,
+      assistantPrincipalName,
+      todayStr,
+      assistantPrincipalColumnMode: printPreferences.assistantPrincipalColumnMode,
+      assistantPrincipalRowsByDate,
+    });
+  }
 
-    const rulesList = DUTY_TEACHER_RESPONSIBILITIES.map((r) => `<li>${escapeHtml(r)}</li>`).join('');
-    const sigNameHtml = (name) =>
-      name
-        ? `<div class="sig-name">${escapeHtml(name)}</div>`
-        : `<div class="sig-name">.......................................</div>`;
-
-    const html = `<!DOCTYPE html>
-<html lang="tr" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
-<head>
-<meta charset="UTF-8">
-<title>Öğretmen Nöbet Çizelgesi</title>
-<style>
-  @page { size: A4 landscape; margin: 16mm 14mm; }
-  * { box-sizing: border-box; }
-  body { font-family: 'Times New Roman', serif; font-size: 12pt; color: #000; margin: 0; }
-  .doc-header { text-align: center; }
-  .doc-header .school-name { font-size: 14pt; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; }
-  .doc-header .doc-title { font-size: 14pt; font-weight: 700; margin-top: 6px; text-transform: uppercase; }
-  .week-block { margin-top: 18px; }
-  .week-block.page-break { page-break-before: always; }
-  table.sched { width: 100%; border-collapse: collapse; font-size: 12pt; }
-  table.sched th, table.sched td { border: 1px solid #000; padding: 6px 8px; text-align: center; }
-  table.sched th { font-weight: 700; }
-  table.sched .td-zone { font-weight: 700; text-align: left; }
-  table.sched .td-holiday { font-style: italic; }
-  .validity { text-align: center; font-weight: 700; margin: 6px 0 4px; }
-  .rules-title { font-weight: 700; text-decoration: underline; margin-top: 16px; }
-  .rules-list { margin: 8px 0 0; padding-left: 22px; }
-  .rules-list li { margin-bottom: 6px; }
-  .signatures { display: flex; justify-content: space-around; margin-top: 40px; page-break-inside: avoid; }
-  .signatures .sig-block { width: 42%; text-align: center; }
-  .signatures .sig-date { margin-bottom: 46px; }
-  .signatures .sig-name { font-weight: 700; }
-</style>
-</head>
-<body>
-  <div class="doc-header">
-    <div class="school-name">${escapeHtml(schoolName)}</div>
-    <div class="doc-title">Öğretmen Nöbet Çizelgesi</div>
-  </div>
-  ${weekBlocks}
-  <div class="rules-title">NÖBETÇİ ÖĞRETMENİN GÖREVLERİ:</div>
-  <ol class="rules-list">${rulesList}</ol>
-  <div class="signatures">
-    <div class="sig-block">
-      <div class="sig-date">${todayStr}</div>
-      ${sigNameHtml(assistantPrincipalName)}
-      <div>Müdür Yardımcısı</div>
-    </div>
-    <div class="sig-block">
-      <div class="sig-date">${todayStr}</div>
-      ${sigNameHtml(principalName)}
-      <div>Okul Müdürü</div>
-    </div>
-  </div>
-</body>
-</html>`;
-
+  // .doc uzantısıyla indirilir — Word bunu doğrudan açar ve TAMAMEN
+  // düzenlenebilir (gerçek bir .docx üretmek için ayrı bir kütüphane
+  // gerekmez, Word HTML içeriği native olarak okur).
+  async function exportHTML() {
+    if (!canAccessFeature(initialSubscription, FEATURES.EXPORT_WORD)) { setPremiumPrompt('export'); return; }
+    if (!table.dates.length) return;
+    const html = await buildDocumentHtmlForCurrentView();
     const blob = new Blob(['﻿' + html], { type: 'application/msword' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
@@ -1021,13 +994,37 @@ export default function Dashboard({
     showToast('Excel indirildi');
   }
 
-  // Ctrl+P ile tarayıcı-native yazdırmayı tam engellemek mümkün değil —
-  // bu buton ana yol, @media print CSS'i (dashboard.css) sadece tabloyu
-  // gösterir. Bilinçli sınır, bkz. PHASE_REPORT.md "kapsam dışı".
-  function printSchedule() {
+  // Ekrandaki tabloyu DEĞİL — Word indirmeyle (exportHTML) AYNI resmi
+  // belgeyi yazdırır (kullanıcı isteği: tek kaynak, iki farklı çıktı
+  // olmasın). window.print() artık ekrana değil, görünmez bir iframe'e
+  // yüklenen resmi belgeye uygulanıyor.
+  async function printSchedule() {
     if (!canAccessFeature(initialSubscription, FEATURES.PRINT)) { setPremiumPrompt('export'); return; }
     if (!table.dates.length) return;
-    window.print();
+    const html = await buildDocumentHtmlForCurrentView();
+
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = 'none';
+
+    let cleaned = false;
+    const cleanup = () => {
+      if (cleaned) return;
+      cleaned = true;
+      iframe.remove();
+    };
+    iframe.onload = () => {
+      iframe.contentWindow.addEventListener('afterprint', cleanup);
+      iframe.contentWindow.focus();
+      iframe.contentWindow.print();
+    };
+    document.body.appendChild(iframe); // önce DOM'a eklenir, contentWindow ancak öyle oluşur
+    iframe.srcdoc = html;
+    setTimeout(cleanup, 30000); // yazdırma diyaloğu iptal edilirse de iframe kalıcı kalmasın
   }
 
   const [sharingBusy, setSharingBusy] = useState(false);
@@ -1392,6 +1389,29 @@ export default function Dashboard({
               </div>
             </div>
 
+            <AssistantPrincipalSettings
+              initialPeople={initialAssistantPrincipals}
+              initialSettings={initialAPRotationSettings}
+              showToast={showToast}
+            />
+
+            <div className="card">
+              <h3><Scale size={17} /> Yazdırma Tercihleri</h3>
+              <label>Görevli Müdür Yardımcısı Yazdırma Biçimi</label>
+              <select
+                value={printPreferences.assistantPrincipalColumnMode}
+                disabled={savingPrintPreferences}
+                onChange={handleChangePrintPreference}
+              >
+                <option value="same_table">Aynı tabloda göster (önerilen)</option>
+                <option value="separate_table">Ayrı tabloda göster</option>
+              </select>
+              <div className="info-box" style={{ marginTop: 10, marginBottom: 0 }}>
+                <Lightbulb size={13} />
+                <span>Word çıktısı ve Yazdır'da uygulanır. Tek belge oluşturulur, iki farklı çıktı olmaz.</span>
+              </div>
+            </div>
+
             <div className="card">
               <h3><Puzzle size={17} /> Kurallar</h3>
               <div className="info-box">
@@ -1490,7 +1510,7 @@ export default function Dashboard({
               <div className="stat-card"><span className="stat-icon"><School size={20} /></span><div><div className="stat-num">{zones.length}</div><div className="stat-lbl">Nöbet Yeri</div></div></div>
               <div className="stat-card"><span className="stat-icon"><CheckCircle2 size={20} /></span><div><div className="stat-num">{rows.length}</div><div className="stat-lbl">Toplam Nöbet</div></div></div>
             </div>
-            <div className="schedule-wrapper printable-schedule">
+            <div className="schedule-wrapper">
               <table className="schedule-table">
                 <thead>
                   <tr>
@@ -1537,6 +1557,9 @@ export default function Dashboard({
                 </tbody>
               </table>
             </div>
+
+            <AssistantPrincipalSection viewedRange={viewedRange} showToast={showToast} />
+
             <div className="export-section">
               <button className="btn btn-primary btn-lg" onClick={exportCSV}>{isPremiumClient ? <Download size={15} /> : <Lock size={15} />} CSV İndir</button>
               <button className="btn btn-outline btn-lg" onClick={exportHTML}>{isPremiumClient ? <FileText size={15} /> : <Lock size={15} />} Word İndir</button>
@@ -1551,32 +1574,11 @@ export default function Dashboard({
 
       {/* ═══════ TAB: DAĞILIM ═══════ */}
       <div className={`tab-content ${activeTab === 'dagitim' ? 'active' : ''}`}>
-        {!distribution.length ? (
-          <EmptyState icon={<BarChart3 size={40} />} title="Program henüz oluşturulmadı" />
-        ) : (
-          <div className="card">
-            <h3><BarChart3 size={17} /> Kişi Başı Nöbet Dağılımı (görüntülenen aralık)</h3>
-            <table className="distrib-table">
-              <thead>
-                <tr><th>Renk</th><th>Ad Soyad</th><th>Nöbet Sayısı</th><th>Dağılım</th></tr>
-              </thead>
-              <tbody>
-                {distribution.map((p) => {
-                  const pct = Math.round((p.count / maxCount) * 100);
-                  const color = colorForName(p.name);
-                  return (
-                    <tr key={p.name}>
-                      <td><div className="person-color" style={{ background: `#${color}`, margin: 'auto' }} /></td>
-                      <td style={{ fontWeight: 600, fontSize: 13 }}>{p.name}</td>
-                      <td style={{ textAlign: 'center', fontFamily: 'var(--font-heading)', fontWeight: 800, fontSize: 18, color: 'var(--primary)' }}>{p.count}</td>
-                      <td><div className="distrib-bar-wrap"><div className="distrib-bar" style={{ width: `${pct}%`, background: `#${color}` }} /></div></td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
+        <DistributionTab
+          monthlyDistribution={distribution}
+          isPremiumClient={isPremiumClient}
+          onRequestPremium={() => setPremiumPrompt('yearly')}
+        />
       </div>
 
       <Toast toast={toast} />

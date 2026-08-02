@@ -73,7 +73,7 @@
 .dash-root .tab-btn.active { color: var(--primary); border-bottom-color: var(--primary); }
 .dash-root .tab-btn:hover:not(.active) { color: var(--text); }
 
-.dash-root .tab-content { display: none; padding: 28px 32px; }
+.dash-root .tab-content { display: none; padding: 24px 28px; }
 .dash-root .tab-content.active { display: block; }
 
 /* ── CARDS & GRIDS ───────────────────────────────────────── */
@@ -81,19 +81,19 @@
   background: var(--card);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  padding: 24px;
-  margin-bottom: 20px;
+  padding: 20px;
+  margin-bottom: 16px;
 }
 .dash-root .card h3 {
   font-family: var(--font-heading);
   font-weight: 800;
-  font-size: 16px;
+  font-size: 15px;
   letter-spacing: 0;
   color: var(--text);
-  margin: 0 0 16px;
+  margin: 0 0 14px;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
 }
 .dash-root .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
 @media(max-width:900px){ .dash-root .two-col { grid-template-columns:1fr; } }
@@ -170,12 +170,12 @@
 .dash-root .person-item {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   flex-wrap: wrap;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  padding: 8px 12px;
+  padding: 7px 10px;
   transition: border-color .15s;
 }
 .dash-root .person-item:hover { border-color: var(--primary); }
@@ -230,7 +230,7 @@
 /* ── SCHEDULE TABLE (özel yerleşim farkları) ────────────────────────────── */
 .dash-root .schedule-wrapper { overflow-x: auto; }
 .dash-root .schedule-table th { text-align: center; white-space: nowrap; }
-.dash-root .schedule-table td { text-align: center; font-weight: 600; font-size: 11px; min-width: 140px; vertical-align: top; }
+.dash-root .schedule-table td { text-align: center; font-weight: 600; font-size: 11px; min-width: 116px; vertical-align: middle; padding: 6px 8px; }
 .dash-root .td-date { font-size: 11px; color: var(--text-muted); white-space: nowrap; background: var(--surface) !important; vertical-align: middle; }
 .dash-root .td-day { font-size: 11px; font-weight: 700; background: var(--surface) !important; white-space: nowrap; vertical-align: middle; }
 .dash-root .td-empty { background: var(--card) !important; }
@@ -246,61 +246,202 @@
   border-left: 3px solid var(--primary);
 }
 
-/* Nöbet hücresi içeriği: renkli kişi rozetleri + elle ekleme kontrolü. */
+/* Nöbet hücresi içeriği: renkli kişi rozetleri, tıklanabilir (popover
+   açar) — sürekli görünen bir X YOK, bkz. ScheduleCell/SchedulePopover.
+   Kart yüksekliği bilinçli olarak küçük tutuldu (kullanıcı isteği: "Kart
+   yüksekliği küçültülsün, satırlar daha kompakt olsun"). */
+.dash-root .cell-person-wrap { position: relative; }
 .dash-root .cell-person {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 4px;
   border-radius: var(--radius-sm);
-  padding: 3px 6px;
-  margin-bottom: 3px;
+  padding: 4px 8px;
+  margin-bottom: 2px;
   font-size: 11px;
-}
-.dash-root .cell-person button {
-  background: none;
-  border: none;
-  color: inherit;
+  font-weight: 700;
   cursor: pointer;
-  font-size: 12px;
-  line-height: 1;
-  opacity: .75;
-  padding: 0 2px;
+  transition: filter .12s, transform .12s;
 }
-.dash-root .cell-person button:hover { opacity: 1; }
-.dash-root .cell-add-btn {
+.dash-root .cell-person:hover { filter: brightness(1.08); }
+.dash-root .cell-person:active { transform: scale(.97); }
+.dash-root .cell-person:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.dash-root .cell-person svg { opacity: .85; flex-shrink: 0; }
+
+/* Boş hücrede "+" normalde GİZLİ, hücre üzerine gelince (hover/focus)
+   belirir — kullanıcı isteği: "Normalde + görünmesin." Kısa/akıcı geçiş. */
+.dash-root .td-empty { position: relative; }
+.dash-root .cell-hover-target { position: relative; display: flex; align-items: center; justify-content: center; min-height: 22px; }
+.dash-root .cell-add-btn-ghost {
   background: none;
   border: 1px dashed var(--border);
   color: var(--text-muted);
   border-radius: var(--radius-sm);
-  width: 100%;
-  padding: 3px 0;
+  width: 22px;
+  height: 22px;
+  line-height: 1;
   cursor: pointer;
-  font-size: 13px;
+  font-size: 14px;
+  opacity: 0;
+  transform: scale(.9);
+  transition: opacity .12s ease, transform .12s ease, border-color .12s, color .12s;
 }
-.dash-root .cell-add-btn:hover { border-color: var(--primary); color: var(--primary); }
-.dash-root .cell-add-row { display: flex; flex-direction: column; gap: 4px; }
-.dash-root .cell-add-row select { padding: 4px 6px; font-size: 11px; }
-.dash-root .cell-add-row button { border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 4px; cursor: pointer; font-size: 11px; padding: 2px 6px; }
+.dash-root .td-empty:hover .cell-add-btn-ghost,
+.dash-root .td-empty:focus-within .cell-add-btn-ghost {
+  opacity: 1;
+  transform: scale(1);
+}
+.dash-root .cell-add-btn-ghost:hover { border-color: var(--primary); color: var(--primary); background: rgba(79, 124, 255, .08); }
+
+/* ── SCHEDULE POPOVER (ekleme/değiştirme/silme — tek paylaşılan bileşen) ── */
+.dash-root .schedule-popover {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 40;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 8px 24px rgba(0,0,0,.28);
+  padding: 4px;
+  min-width: 160px;
+  max-height: 240px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.dash-root .schedule-popover-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: none;
+  border: none;
+  color: var(--text);
+  text-align: left;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 7px 10px;
+  border-radius: 5px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.dash-root .schedule-popover-item.active,
+.dash-root .schedule-popover-item:hover { background: var(--surface2, var(--surface)); }
+.dash-root .schedule-popover-item.danger { color: var(--danger); }
+.dash-root .schedule-popover-item.danger.active,
+.dash-root .schedule-popover-item.danger:hover { background: rgba(239, 68, 68, 0.12); }
+.dash-root .schedule-popover-empty { padding: 8px 10px; font-size: 11px; color: var(--text-muted); white-space: normal; max-width: 220px; }
 
 /* ── STATS ───────────────────────────────────────────────── */
-.dash-root .stats-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; margin-bottom: 20px; }
+.dash-root .stats-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; margin-bottom: 16px; }
 .dash-root .stat-card {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  padding: 14px 16px;
+  padding: 12px 14px;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
 }
-.dash-root .stat-icon { font-size: 22px; display: flex; }
-.dash-root .stat-num { font-family: var(--font-heading); font-weight: 800; font-size: 26px; line-height: 1; color: var(--primary); }
-.dash-root .stat-lbl { font-size: 11px; color: var(--text-muted); font-weight: 600; letter-spacing: .3px; text-transform: uppercase; }
+.dash-root .stat-icon { font-size: 20px; display: flex; color: var(--text-muted); }
+.dash-root .stat-num { font-family: var(--font-heading); font-weight: 800; font-size: 22px; line-height: 1.1; color: var(--primary); }
+.dash-root .stat-lbl { font-size: 10px; color: var(--text-muted); font-weight: 600; letter-spacing: .3px; text-transform: uppercase; }
 
 /* ── DISTRIB TABLE (özel yerleşim farkları) ─────────────────────────────── */
 .dash-root .distrib-bar-wrap { background: var(--border); border-radius: 4px; height: 6px; width: 100px; display: inline-block; vertical-align: middle; }
 .dash-root .distrib-bar { height: 6px; border-radius: 4px; background: var(--primary); }
+
+/* ── SEGMENTED CONTROL (Dağılım: Aylık/Yıllık) ──────────────────────────── */
+.dash-root .segmented-control {
+  display: inline-flex;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 3px;
+  margin-bottom: 18px;
+  gap: 2px;
+}
+.dash-root .segmented-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 700;
+  padding: 7px 18px;
+  border-radius: calc(var(--radius-md) - 3px);
+  cursor: pointer;
+  transition: background .15s, color .15s;
+}
+.dash-root .segmented-btn.active { background: var(--primary); color: #fff; }
+.dash-root .segmented-btn:hover:not(.active) { color: var(--text); }
+
+/* ── YILLIK DAĞILIM ──────────────────────────────────────────────────── */
+.dash-root .yearly-teacher-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+}
+.dash-root .sparkline-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  height: 52px;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+.dash-root .sparkline-bar-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  flex: 1;
+  height: 100%;
+  min-width: 18px;
+}
+.dash-root .sparkline-bar { width: 60%; min-width: 6px; background: var(--primary); border-radius: 2px 2px 0 0; opacity: .85; }
+.dash-root .sparkline-label { font-size: 9px; color: var(--text-muted); margin-top: 3px; white-space: nowrap; }
+
+/* ── GÖREVLİ MÜDÜR YARDIMCISI BÖLÜMÜ (Program sekmesi) ──────────────────── */
+.dash-root .ap-section { margin-top: 20px; }
+.dash-root .ap-date-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.dash-root .ap-date-cell-wrap {
+  position: relative;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: stretch;
+}
+.dash-root .ap-date-label { font-size: 10px; color: var(--text-muted); font-weight: 700; text-transform: uppercase; letter-spacing: .2px; }
+.dash-root .ap-person-chip {
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 6px 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #fff;
+  cursor: pointer;
+  text-align: center;
+}
+.dash-root .ap-empty-chip {
+  background: none;
+  border: 1px dashed var(--border);
+  color: var(--text-muted);
+  border-radius: var(--radius-sm);
+  padding: 6px 0;
+  cursor: pointer;
+  font-size: 13px;
+}
+.dash-root .ap-empty-chip:hover { border-color: var(--primary); color: var(--primary); }
+.dash-root .btn-sm { padding: 6px 12px; font-size: 12px; border-radius: var(--radius-sm); }
 
 /* ── EXPORT ──────────────────────────────────────────────── */
 .dash-root .export-section { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 20px; }
@@ -335,14 +476,4 @@
 .dash-root .month-tab-btn.locked { opacity: .7; }
 .dash-root .month-tab-btn:hover:not(.active) { color: var(--text); border-color: var(--primary); }
 
-/* ── YAZDIRMA (Faz 9: sadece nöbet tablosu basılır) ──────────── */
-@media print {
-  .dash-root header, .dash-root .tabs, .dash-root .month-tabs,
-  .dash-root .stats-grid, .dash-root .export-section, .toast {
-    display: none !important;
-  }
-  .dash-root .tab-content { display: block !important; padding: 0; }
-  .dash-root .tab-content:not(.active) { display: none !important; }
-  .dash-root .schedule-wrapper.printable-schedule { overflow: visible; }
-}
 .dash-root .wdcheck input { accent-color:var(--primary); width: auto; }

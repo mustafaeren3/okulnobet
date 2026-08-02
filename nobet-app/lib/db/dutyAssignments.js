@@ -3,6 +3,7 @@
 // mimari kural 2).
 
 import { getWeekStart, addDays } from '@/lib/engine/rotation';
+import { assertBelongsToSchool } from './ownership';
 
 export async function getAssignmentCountForTeacherDate(supabase, teacherId, date) {
   const { count, error } = await supabase
@@ -70,8 +71,14 @@ export async function createAssignments(supabase, schoolId, assignments) {
 
 // İdarecinin elle eklediği bir atama — is_manual=true, Scheduling
 // Engine (generateBulkSchedule) bir daha dokunmaz (silme adımı sadece
-// is_manual=false satırları hedefliyor).
+// is_manual=false satırları hedefliyor). teacherId/zoneId insert'ten ÖNCE
+// aynı okula ait mi diye doğrulanır (kalite denetimi bulgusu — bkz.
+// lib/db/ownership.js, normal UI akışında imkansız ama doğrudan action
+// çağrısına karşı savunma).
 export async function createManualAssignment(supabase, schoolId, { teacherId, zoneId, date, slotKey }) {
+  await assertBelongsToSchool(supabase, 'teachers', teacherId, schoolId, 'Öğretmen');
+  await assertBelongsToSchool(supabase, 'duty_zones', zoneId, schoolId, 'Nöbet yeri');
+
   const { data, error } = await supabase
     .from('duty_assignments')
     .insert({
@@ -91,6 +98,32 @@ export async function createManualAssignment(supabase, schoolId, { teacherId, zo
 export async function deleteAssignment(supabase, assignmentId) {
   const { error } = await supabase.from('duty_assignments').delete().eq('id', assignmentId);
   if (error) throw new Error(error.message);
+}
+
+// Bir atamadaki öğretmeni ATOMİK olarak değiştirir — tek bir SQL
+// fonksiyonu (swap_duty_assignment, bkz. supabase/migrations/0042)
+// içinde sil+ekle, tek transaction. İkinci adım (ekleme) unique
+// constraint'e çarparsa TÜM işlem rollback olur, eski atama kalır —
+// önceki iki-istekli (removeAssignment + addManualAssignment) akışın
+// "ikinci istek başarısız olursa hücre boş kalır" riskini ortadan
+// kaldırır. Yeni öğretmenin okula ait olduğu SQL fonksiyonunun içinde
+// doğrulanıyor.
+export async function swapAssignment(supabase, assignmentId, newTeacherId) {
+  // .select() BİLEREK yok — RPC zaten RETURNS TABLE ile tam istenen
+  // satırı döndürüyor; .select() eklemek PostgREST'in fonksiyon sonucunu
+  // yeniden sorgulamaya çalışmasına ve "column reference is ambiguous"
+  // hatasına yol açıyordu (canlıda doğrulandı).
+  const { data, error } = await supabase
+    .rpc('swap_duty_assignment', { p_assignment_id: assignmentId, p_new_teacher_id: newTeacherId })
+    .single();
+  if (error) throw new Error(error.message);
+  return {
+    id: data.id,
+    duty_date: data.duty_date,
+    is_manual: data.is_manual,
+    teachers: { id: data.teacher_id, full_name: data.teacher_full_name },
+    duty_zones: { id: data.zone_id, name: data.zone_name },
+  };
 }
 
 // Bir okulun [startDate, endDate] aralığındaki OTOMATİK (is_manual=false)
@@ -153,6 +186,25 @@ export async function getEarliestAssignmentDate(supabase, schoolId) {
     .limit(1);
   if (error) throw new Error(error.message);
   return data[0]?.duty_date ?? null;
+}
+
+// Yıllık Dağılım görünümünün veri kaynağı — kalite denetimi bulgusu:
+// önceki hali (getAllAssignmentsForSchool) TÜM ham duty_assignments
+// satırlarını tarih filtresiz çekiyordu, PostgREST'in varsayılan 1000
+// satır limitine sessizce takılabiliyordu. Artık aggregasyon Postgres'te
+// yapılıyor (get_yearly_distribution RPC, bkz. supabase/migrations/0040):
+// istemciye SADECE (öğretmen × ay) kırılımındaki SAYIMLAR geliyor — bu
+// sonuç kümesi ham nöbet sayısından (binlerce olabilir) BAĞIMSIZ, öğretmen
+// sayısı × ay sayısı ile sınırlı (tipik bir okulda birkaç yüz satır),
+// pratikte 1000 satır sınırına hiç yaklaşmaz. RPC parametre almıyor —
+// current_school_id() ile kendi kapsamını belirliyor (bkz. RLS'in aynı
+// deseni), bu yüzden schoolId burada kullanılmıyor (fonksiyon imzasında
+// tutarlılık için duruyor, çağıran yine de okulunu requireSchoolId ile
+// doğrulamış oluyor).
+export async function getYearlyDistribution(supabase) {
+  const { data, error } = await supabase.rpc('get_yearly_distribution');
+  if (error) throw new Error(error.message);
+  return data;
 }
 
 // Bir okulun TÜM zamanlardaki atamalarını (tarih filtresi yok) tek

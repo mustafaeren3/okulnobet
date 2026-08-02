@@ -22,6 +22,7 @@ export async function getSchoolForUser(supabase, userId) {
       schoolName: data.schools?.name,
       principalName: data.schools?.profile?.principal_name || '',
       assistantPrincipalName: data.schools?.profile?.assistant_principal_name || '',
+      printPreferences: withDefaultPrintPreferences(data.schools?.profile?.printPreferences),
       isImpersonating: false,
     };
   }
@@ -47,10 +48,28 @@ export async function getSchoolForUser(supabase, userId) {
     schoolName: schoolRow?.name,
     principalName: schoolRow?.profile?.principal_name || '',
     assistantPrincipalName: schoolRow?.profile?.assistant_principal_name || '',
+    printPreferences: withDefaultPrintPreferences(schoolRow?.profile?.printPreferences),
     isImpersonating: true,
     impersonatedOwnerEmail: impersonation.owner_email,
     impersonatedOwnerFullName: impersonation.owner_full_name,
   };
+}
+
+// Yazdırma tercihlerinin varsayılanı — Görevli Müdür Yardımcısı sütunu
+// resmi çizelgelere en yakın seçenek olan "aynı tabloda" gösterilsin
+// (bkz. supabase/migrations yok — schools.profile jsonb'de saklanıyor,
+// yeni bir migration gerekmedi). İleride ikinci bir yazdırma tercihi
+// eklenirse aynı objeye yeni bir anahtar olarak eklenir.
+const DEFAULT_PRINT_PREFERENCES = { assistantPrincipalColumnMode: 'same_table' };
+
+function withDefaultPrintPreferences(stored) {
+  return { ...DEFAULT_PRINT_PREFERENCES, ...(stored || {}) };
+}
+
+export async function getPrintPreferences(supabase, schoolId) {
+  const { data, error } = await supabase.from('schools').select('profile').eq('id', schoolId).single();
+  if (error) throw new Error(error.message);
+  return withDefaultPrintPreferences(data.profile?.printPreferences);
 }
 
 // Okul müdürü / müdür yardımcısı adı — 0003_school_profile.sql'deki esnek

@@ -44,4 +44,32 @@ describe('lib/db/dutyAssignments — createManualAssignment + deleteAssignment',
     const rows = await getAssignmentsForRange(client, schoolId, '2026-10-07', '2026-10-07');
     expect(rows.find((r) => r.id === row.id)).toBeUndefined();
   });
+
+  // Kalite denetimi bulgusu: teacherId/zoneId önceden insert'ten önce
+  // aynı okula ait mi diye doğrulanmıyordu (bkz. lib/db/ownership.js).
+  // İKİ AYRI client kullanılıyor — signUp aynı client'ın oturumunu
+  // DEĞİŞTİRİR, tek client ile ikinci bir okul açılırsa İLK okul için
+  // yapılan sonraki insert'ler RLS'e takılır (bkz. atomicSwap.test.js'teki
+  // aynı not).
+  it('başka okulun öğretmeniyle manuel atama reddedilir', async () => {
+    const otherClient = newClient();
+    const otherSchoolId = await signUpAndRegisterSchool(otherClient, makeTestUser('manual-foreign-teacher', RUN_ID));
+    const foreignTeacher = await createTeacher(otherClient, otherSchoolId, { full_name: 'ZZZ_TENANT_TEST_MANUAL_FOREIGN_T', branch: 'sınıf' });
+    const zone = await createDutyZone(client, schoolId, { name: 'ZZZ_TENANT_TEST_MANUAL_FOREIGN_ZONE' });
+
+    await expect(
+      createManualAssignment(client, schoolId, { teacherId: foreignTeacher.id, zoneId: zone.id, date: '2026-10-08' }),
+    ).rejects.toThrow(/bu okula ait değil/);
+  });
+
+  it('başka okulun bölgesiyle manuel atama reddedilir', async () => {
+    const otherClient = newClient();
+    const otherSchoolId = await signUpAndRegisterSchool(otherClient, makeTestUser('manual-foreign-zone', RUN_ID));
+    const teacher = await createTeacher(client, schoolId, { full_name: 'ZZZ_TENANT_TEST_MANUAL_FZ_T', branch: 'sınıf' });
+    const foreignZone = await createDutyZone(otherClient, otherSchoolId, { name: 'ZZZ_TENANT_TEST_MANUAL_FOREIGN_ZONE_2' });
+
+    await expect(
+      createManualAssignment(client, schoolId, { teacherId: teacher.id, zoneId: foreignZone.id, date: '2026-10-09' }),
+    ).rejects.toThrow(/bu okula ait değil/);
+  });
 });
