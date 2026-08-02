@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { AnimatePresence } from 'framer-motion';
 import Button from './Button';
 import LoginModal from './LoginModal';
 import SignupModal from './SignupModal';
@@ -79,12 +78,23 @@ export default function Navbar() {
         </div>
       )}
 
-      <AnimatePresence>
-        {loginOpen && <LoginModal onClose={() => setLoginOpen(false)} />}
-      </AnimatePresence>
-      <AnimatePresence>
-        {signupOpen && <SignupModal onClose={() => setSignupOpen(false)} />}
-      </AnimatePresence>
+      {/* Kalite denetimi bulgusu: framer-motion 12.43.0'da AnimatePresence,
+          bu modallardaki iç içe motion.div (backdrop + panel) yapısıyla
+          exit animasyonunu HİÇBİR ZAMAN tamamlamıyor — bu da onClose()
+          state'i güncellese bile (kanıtlandı: X, ESC, overlay tıklaması
+          hepsi onClose'u tetikliyor) bileşenin DOM'dan asla kalkmamasına
+          yol açıyordu. Modal AÇILIRKEN animasyon (initial→animate,
+          bkz. Modal.jsx) bundan etkilenmiyor, sadece AnimatePresence'a
+          bağlı ÇIKIŞ animasyonu etkileniyordu. Kapanmayan bir modal,
+          eksik bir çıkış animasyonundan çok daha ciddi bir kırılma
+          olduğu için AnimatePresence buradan kaldırıldı — modal artık
+          animasyonsuz ama GÜVENİLİR şekilde kapanıyor. Aynı desenin
+          Dashboard.jsx (SuccessScreen/PremiumScreen) ve Dropdown/
+          FAQAccordion/PageTransition'da da kullanıldığı, onların da
+          aynı riski taşıyabileceği ayrı bir takip maddesi olarak
+          bildirildi (bu görevin kapsamı dışında). */}
+      {loginOpen && <LoginModal onClose={() => setLoginOpen(false)} />}
+      {signupOpen && <SignupModal onClose={() => setSignupOpen(false)} />}
     </>
   );
 }
