@@ -6,7 +6,7 @@
 export const SITE_CONTENT_DEFAULTS = {
   hero: {
     title: 'OkulNöbet ile Programınızı\nDakikalar İçinde Oluşturun',
-    subtitle: 'Okullar için otomatik nöbet planlama, adil dağıtım, MEB takvimi, tek tıkla PDF çıktısı.',
+    subtitle: 'Öğretmenleri MEB teşkilat şemasından otomatik aktarın, nöbet yerlerini ve kuralları belirleyin; adil nöbet çizelgenizi birkaç dakikada oluşturup Word olarak yazdırın ve panoya asın.',
     ctaPrimaryLabel: 'Ücretsiz Başla',
     ctaPrimaryHref: '/signup',
     ctaSecondaryLabel: 'Fiyatlandırmayı gör →',
@@ -22,9 +22,18 @@ export const SITE_CONTENT_DEFAULTS = {
   },
   testimonials: {
     items: [
-      { role: 'Müdür Yardımcısı, Devlet Okulu', quote: 'Nöbet çizelgesini her ay elle hazırlamak saatler alıyordu; birkaç dakikada bitmesi büyük fark yaratıyor.' },
-      { role: 'Okul Müdürü', quote: 'Kimin ne zaman nöbet tuttuğu artık şeffaf — kimse sırasının atlandığını iddia edemiyor.' },
-      { role: 'Nöbetçi Öğretmen', quote: 'Programı telefonumdan görebiliyorum, kağıt liste asılmasını beklemem gerekmiyor.' },
+      {
+        role: 'Müdür Yardımcısı',
+        quote: 'Nöbet çizelgesini hazırlamak eskiden saatler sürüyordu.\nŞimdi öğretmenleri tek tek yazmıyoruz.\nMEB teşkilat şemasından birkaç saniyede aktarıyoruz.\nKuralları belirleyip programı oluşturuyoruz.',
+      },
+      {
+        role: 'Okul Müdürü',
+        quote: 'Eskiden her ay aynı tartışmalar yaşanıyordu.\nŞimdi sistem dağılımı adaletli yaptığı için itirazları büyük ölçüde ortadan kalktı.',
+      },
+      {
+        role: 'Nöbetçi Öğretmen',
+        quote: 'Program hazır olduktan sonra Word çıktısını alıp panoya asıyoruz.\nAyrıca isteyen herkes telefonundan da aynı programa ulaşabiliyor.',
+      },
     ],
   },
   faq: {

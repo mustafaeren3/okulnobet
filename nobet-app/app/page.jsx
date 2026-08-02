@@ -151,15 +151,19 @@ export default async function Home() {
         <Reveal className="mkt-section">
           <div className="mkt-section-head">
             <span className="mkt-eyebrow">Okul İdarecileri İçin</span>
-            <h2>Ürünü Şekillendiren İhtiyaçlar</h2>
-            <p className="mkt-section-sub">Gerçek müşteri yorumu yerine, ürünü tasarlarken yol gösterici olan tipik ihtiyaçları paylaşıyoruz.</p>
+            <h2>Okul Yöneticilerinin En Çok Yaşadığı Sorunlar</h2>
+            <p className="mkt-section-sub">OkulNöbet, yıllardır okul yöneticilerinin zamanını alan tekrar eden nöbet planlama süreçlerini kolaylaştırmak için geliştirildi.</p>
           </div>
           <div className="mkt-pilot-grid">
             {testimonials.items.map((n) => (
-              <Card key={n.role} className="mkt-pilot-card">
-                <p>&ldquo;{n.quote}&rdquo;</p>
-                <div className="mkt-pilot-role">{n.role}</div>
-              </Card>
+              <figure key={n.role} className="mkt-pilot-card">
+                <blockquote className="mkt-pilot-quote">
+                  {n.quote.split('\n').filter(Boolean).map((line, i) => (
+                    <p key={i}>{line}</p>
+                  ))}
+                </blockquote>
+                <figcaption className="mkt-pilot-role">{n.role}</figcaption>
+              </figure>
             ))}
           </div>
         </Reveal>
