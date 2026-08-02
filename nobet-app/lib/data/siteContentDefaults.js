@@ -24,15 +24,18 @@ export const SITE_CONTENT_DEFAULTS = {
     items: [
       {
         role: 'Müdür Yardımcısı',
+        org: 'Devlet Ortaokulu',
         quote: 'Nöbet çizelgesini hazırlamak eskiden saatler sürüyordu.\nŞimdi öğretmenleri tek tek yazmıyoruz.\nMEB teşkilat şemasından birkaç saniyede aktarıyoruz.\nKuralları belirleyip programı oluşturuyoruz.',
       },
       {
         role: 'Okul Müdürü',
+        org: 'Anadolu Lisesi',
         quote: 'Eskiden her ay aynı tartışmalar yaşanıyordu.\nŞimdi sistem dağılımı adaletli yaptığı için itirazları büyük ölçüde ortadan kalktı.',
       },
       {
-        role: 'Nöbetçi Öğretmen',
-        quote: 'Program hazır olduktan sonra Word çıktısını alıp panoya asıyoruz.\nAyrıca isteyen herkes telefonundan da aynı programa ulaşabiliyor.',
+        role: 'Müdür Yardımcısı',
+        org: 'Devlet İlkokulu',
+        quote: 'Program hazır olduktan sonra\nWord çıktısını alıp doğrudan panoya asıyoruz.\nTüm süreç birkaç dakika içinde tamamlanıyor.',
       },
     ],
   },

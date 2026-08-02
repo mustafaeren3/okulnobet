@@ -156,13 +156,16 @@ export default async function Home() {
           </div>
           <div className="mkt-pilot-grid">
             {testimonials.items.map((n) => (
-              <figure key={n.role} className="mkt-pilot-card">
+              <figure key={`${n.role}-${n.org}`} className="mkt-pilot-card">
                 <blockquote className="mkt-pilot-quote">
                   {n.quote.split('\n').filter(Boolean).map((line, i) => (
                     <p key={i}>{line}</p>
                   ))}
                 </blockquote>
-                <figcaption className="mkt-pilot-role">{n.role}</figcaption>
+                <figcaption className="mkt-pilot-role">
+                  <span className="mkt-pilot-role-title">{n.role}</span>
+                  <span className="mkt-pilot-role-org">{n.org}</span>
+                </figcaption>
               </figure>
             ))}
           </div>
