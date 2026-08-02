@@ -3,7 +3,6 @@
 import Link from 'next/link';
 import SignupForm from './SignupForm';
 import Logo from '../../components/Logo';
-import '../auth.css';
 
 export default function SignupPage() {
   return (

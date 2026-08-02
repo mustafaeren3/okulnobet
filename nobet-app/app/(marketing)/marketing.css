@@ -127,3 +127,43 @@
 
 /* ── ÖZELLİKLER anchor hedefi için sticky navbar altında boşluk ── */
 #ozellikler { scroll-margin-top: 84px; }
+
+/* ── HAKKIMIZDA: Biz Kimiz/Misyon/Vizyon — dokümantasyon tarzı sade
+   düzen (kartsız, geniş boşluk, dar okuma ölçüsü). Kasıtlı olarak
+   .mkt-section'dan ayrı: o class sss/fiyatlandırma/yasal metin
+   sayfalarında da kullanılıyor, bu sayfaya özel tipografi orada
+   etkilenmesin diye kendi class'ı var. */
+.about-header { padding: 64px 0 8px; }
+.about-header h1 {
+  font-family: var(--font-heading);
+  font-weight: 800;
+  font-size: 44px;
+  letter-spacing: -1px;
+  line-height: 1.15;
+  margin: 0;
+}
+
+.about-block { max-width: 640px; margin: 88px 0; }
+.about-block h2 {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: 26px;
+  letter-spacing: -0.3px;
+  color: var(--text);
+  margin: 0 0 24px;
+}
+.about-block p {
+  color: var(--text-muted);
+  font-size: 17px;
+  line-height: 1.85;
+  margin: 0 0 22px;
+}
+.about-block p:last-child { margin-bottom: 0; }
+
+@media (max-width: 640px) {
+  .about-header { padding: 40px 0 4px; }
+  .about-header h1 { font-size: 32px; }
+  .about-block { margin: 56px 0; }
+  .about-block h2 { font-size: 22px; }
+  .about-block p { font-size: 16px; line-height: 1.75; }
+}

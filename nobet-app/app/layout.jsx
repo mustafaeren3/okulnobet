@@ -6,6 +6,14 @@ import { getSiteContentCached } from '@/lib/db/cms';
 import { withDefaults } from '@/lib/data/siteContentDefaults';
 import './globals.css';
 import './components.css';
+// Kök layout'ta: LoginModal/SignupModal (Navbar üzerinden HER route'ta
+// açılabiliyor) bu class'lara bağımlı. Next.js CSS'i route segmentine
+// göre parçalıyor — sadece /login veya /signup page.jsx'inde import
+// edilseydi, modal ana sayfada /login'e hiç gidilmeden açıldığında bu
+// stil dosyası henüz yüklenmemiş oluyor (input'lar tarayıcı varsayılanıyla
+// çiziliyor), ta ki Next o route'u arka planda prefetch edip getirene
+// kadar. Kök layout her sayfada render olduğundan, import da buraya taşındı.
+import './(auth)/auth.css';
 
 const inter = Inter({
   subsets: ['latin'],

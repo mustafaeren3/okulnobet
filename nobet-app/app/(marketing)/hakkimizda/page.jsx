@@ -1,43 +1,60 @@
-import { CONTACT_EMAIL } from '../../components/contactInfo';
-
 export const metadata = { title: 'Hakkımızda' };
 
 export default function HakkimizdaPage() {
   return (
     <main className="mkt-main mkt-narrow">
-      <div className="mkt-hero" style={{ padding: '20px 0 8px' }}>
+      <header className="about-header">
         <h1>Hakkımızda</h1>
-      </div>
+      </header>
 
-      <div className="mkt-section">
-        <h2>Kimiz?</h2>
+      <section className="about-block">
+        <h2>Biz Kimiz?</h2>
         <p>
-          OkulNöbet, <span className="mkt-placeholder">[DOLDURULACAK: şirket/şahıs unvanı]</span> tarafından
-          geliştirilen, Türkiye'deki okullar için nöbet/görev programlarını otomatik ve adil şekilde oluşturan
-          bir SaaS (hizmet olarak yazılım) ürünüdür.
+          OkulNöbet, Türkiye'deki eğitim kurumlarının nöbet ve görev planlama süreçlerini kolaylaştırmak amacıyla
+          geliştirilen bulut tabanlı bir yazılım platformudur.
         </p>
         <p>
-          İletişim: <a href={`mailto:${CONTACT_EMAIL}`} style={{ color: 'var(--primary-hover)' }}>{CONTACT_EMAIL}</a> ·{' '}
-          Adres: <span className="mkt-placeholder">[DOLDURULACAK: şirket adresi]</span>
+          Okullarda haftalar sürebilen manuel nöbet planlama sürecini dakikalar içinde tamamlamayı hedefler.
+          Öğretmenlerin görev dağılımını adil ve dengeli şekilde planlarken, yönetmeliklere uygun ve esnek bir
+          yapı sunar.
         </p>
-      </div>
+        <p>
+          Platform; nöbet planlama, öğretmen yönetimi, görev dağılımı analizi ve resmi belge çıktıları gibi
+          süreçleri tek bir sistem üzerinden yönetebilmeniz için tasarlanmıştır.
+        </p>
+        <p>
+          OkulNöbet sürekli geliştirilen bir üründür. Okullardan gelen geri bildirimler doğrultusunda yeni
+          özellikler düzenli olarak eklenmekte ve sistem her geçen gün daha güçlü hâle gelmektedir.
+        </p>
+        <p>
+          Amacımız, okul yöneticilerinin zamanını alan tekrarlayan işlemleri azaltarak planlama süreçlerini
+          daha hızlı, daha güvenilir ve daha şeffaf hâle getirmektir.
+        </p>
+      </section>
 
-      <div className="mkt-section">
+      <section className="about-block">
         <h2>Misyonumuz</h2>
         <p>
-          Okul idarecilerinin saatlerini alan, hataya açık ve şeffaflıktan uzak elle nöbet dağıtımı sürecini ortadan
-          kaldırmak; her öğretmenin kurallara uygun ve adil şekilde nöbete girdiği, itiraz ve yanlış anlaşılmaların
-          önüne geçen bir sistem sunmak.
+          Okullarda saatler süren nöbet planlama sürecini dakikalar içinde tamamlanabilir hâle getirerek; adil,
+          şeffaf ve yönetmeliklere uygun planlamayı herkes için kolaylaştırmak.
         </p>
-      </div>
+        <p>
+          Tekrarlayan işleri otomatikleştiren, hata riskini azaltan ve okul yöneticilerine zaman kazandıran
+          güvenilir yazılımlar geliştirmek.
+        </p>
+      </section>
 
-      <div className="mkt-section">
+      <section className="about-block">
         <h2>Vizyonumuz</h2>
         <p>
-          Türkiye'deki her okulun idari yükünü azaltan, günlük hayatın doğal bir parçası hâline gelmiş, güvenilir
-          ve erişilebilir bir okul yönetim aracı olmak.
+          Türkiye'deki okulların günlük yönetim süreçlerini modern teknolojilerle kolaylaştıran, güven duyulan
+          ve tercih edilen okul yönetim yazılımlarından biri olmak.
         </p>
-      </div>
+        <p>
+          Nöbet planlamasından başlayarak eğitim kurumlarının zaman kazandıran dijital dönüşümüne katkı
+          sağlayan yenilikçi çözümler üretmeye devam etmek.
+        </p>
+      </section>
 
       <div className="mkt-section">
         <h2>Neden Biz?</h2>

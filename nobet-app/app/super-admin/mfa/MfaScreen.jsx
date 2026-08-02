@@ -4,7 +4,6 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { startEnrollment, cancelEnrollment, verifyEnrollment, startChallenge, verifyChallenge } from './actions';
 import Logo from '../../components/Logo';
-import '../../(auth)/auth.css';
 
 // mode='enroll': hiç doğrulanmış TOTP faktörü yok, kurulum (QR + kod)
 // gösterilir. mode='challenge': faktör zaten var, sadece kod isteniyor.
