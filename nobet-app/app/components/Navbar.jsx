@@ -5,16 +5,18 @@ import Link from 'next/link';
 import { AnimatePresence } from 'framer-motion';
 import Button from './Button';
 import LoginModal from './LoginModal';
+import SignupModal from './SignupModal';
 import Logo from './Logo';
 
 // app/page.jsx ve app/(marketing)/layout.jsx tarafından paylaşılan tek
-// header. Giriş modalının açık/kapalı durumu burada tutuluyor — iki
-// mount noktası da aynı bileşeni kullandığı için ayrı bir context'e
-// gerek yok.
+// header. Giriş/Kayıt modallarının açık/kapalı durumu burada tutuluyor —
+// iki mount noktası da aynı bileşenleri kullandığı için ayrı bir
+// context'e gerek yok.
 export default function Navbar() {
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [loginOpen, setLoginOpen] = useState(false);
+  const [signupOpen, setSignupOpen] = useState(false);
 
   useEffect(() => {
     function onScroll() {
@@ -28,6 +30,11 @@ export default function Navbar() {
   function openLogin() {
     setMobileOpen(false);
     setLoginOpen(true);
+  }
+
+  function openSignup() {
+    setMobileOpen(false);
+    setSignupOpen(true);
   }
 
   return (
@@ -46,7 +53,7 @@ export default function Navbar() {
 
         <div className="navbar-actions">
           <Button variant="ghost" onClick={openLogin}>Giriş Yap</Button>
-          <Button href="/signup" variant="primary">Ücretsiz Başla</Button>
+          <Button variant="primary" onClick={openSignup}>Ücretsiz Başla</Button>
         </div>
 
         <button
@@ -68,12 +75,15 @@ export default function Navbar() {
           <Link href="/#ozellikler" onClick={() => setMobileOpen(false)}>Özellikler</Link>
           <Link href="/sss" onClick={() => setMobileOpen(false)}>SSS</Link>
           <Button variant="outline" onClick={openLogin}>Giriş Yap</Button>
-          <Button href="/signup" variant="primary" onClick={() => setMobileOpen(false)}>Ücretsiz Başla</Button>
+          <Button variant="primary" onClick={openSignup}>Ücretsiz Başla</Button>
         </div>
       )}
 
       <AnimatePresence>
         {loginOpen && <LoginModal onClose={() => setLoginOpen(false)} />}
+      </AnimatePresence>
+      <AnimatePresence>
+        {signupOpen && <SignupModal onClose={() => setSignupOpen(false)} />}
       </AnimatePresence>
     </>
   );
