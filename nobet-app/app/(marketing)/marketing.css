@@ -33,10 +33,11 @@
 .mkt-hero h1 {
   font-family: var(--font-heading);
   font-weight: 800;
-  font-size: 48px;
+  font-size: clamp(28px, 8vw, 48px);
   letter-spacing: -1px;
   margin: 0 0 20px;
   line-height: 1.1;
+  overflow-wrap: break-word;
 }
 .mkt-hero p { color: var(--text-muted); font-size: 18px; line-height: 1.6; max-width: 600px; margin: 0 auto 32px; }
 .mkt-hero-actions { display: flex; align-items: center; gap: 20px; justify-content: center; flex-wrap: wrap; }
@@ -91,7 +92,7 @@
   text-align: left;
   padding: 80px 24px 48px;
 }
-.mkt-hero-split .mkt-hero-copy h1 { font-size: 46px; }
+.mkt-hero-split .mkt-hero-copy h1 { font-size: clamp(28px, 8vw, 46px); }
 .mkt-hero-split .mkt-hero-copy p { margin: 0 0 32px; max-width: 460px; }
 .mkt-hero-visual { display: flex; justify-content: center; }
 @media (max-width: 860px) {
@@ -137,10 +138,11 @@
 .about-header h1 {
   font-family: var(--font-heading);
   font-weight: 800;
-  font-size: 44px;
+  font-size: clamp(28px, 8vw, 44px);
   letter-spacing: -1px;
   line-height: 1.15;
   margin: 0;
+  overflow-wrap: break-word;
 }
 
 .about-block { max-width: 640px; margin: 88px 0; }
@@ -162,7 +164,6 @@
 
 @media (max-width: 640px) {
   .about-header { padding: 40px 0 4px; }
-  .about-header h1 { font-size: 32px; }
   .about-block { margin: 56px 0; }
   .about-block h2 { font-size: 22px; }
   .about-block p { font-size: 16px; line-height: 1.75; }

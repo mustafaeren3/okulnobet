@@ -6,15 +6,25 @@ import { withDefaults } from '@/lib/data/siteContentDefaults';
 import Logo from './Logo';
 import InstagramIcon from './InstagramIcon';
 
-const FOOTER_LINKS = [
-  { href: '/hakkimizda', label: 'Hakkımızda' },
-  { href: '/sss', label: 'SSS' },
-  { href: '/blog', label: 'Blog' },
-  { href: '/gizlilik', label: 'KVKK & Gizlilik' },
-  { href: '/kullanim-sartlari', label: 'Kullanım Şartları' },
-  { href: '/cerez-politikasi', label: 'Çerez Politikası' },
-  { href: '/odeme-guvenligi', label: 'Ödeme Güvenliği' },
-  { href: '/kurumsal', label: 'İletişim' },
+const FOOTER_GROUPS = [
+  {
+    title: 'Kurumsal',
+    links: [
+      { href: '/hakkimizda', label: 'Hakkımızda' },
+      { href: '/blog', label: 'Blog' },
+      { href: '/sss', label: 'SSS' },
+      { href: '/kurumsal', label: 'İletişim' },
+    ],
+  },
+  {
+    title: 'Yasal',
+    links: [
+      { href: '/gizlilik', label: 'KVKK & Gizlilik' },
+      { href: '/kullanim-sartlari', label: 'Kullanım Şartları' },
+      { href: '/cerez-politikasi', label: 'Çerez Politikası' },
+      { href: '/odeme-guvenligi', label: 'Ödeme Güvenliği' },
+    ],
+  },
 ];
 
 // Server Component (async) — footer TÜM sayfalarda göründüğü için
@@ -44,11 +54,16 @@ export default async function Footer() {
             <a href={social.instagramUrl} target="_blank" rel="noopener noreferrer"><InstagramIcon size={14} /> {social.instagramHandle}</a>
           </div>
         </div>
-        <nav className="footer-links">
-          {FOOTER_LINKS.map((link) => (
-            <Link key={link.href} href={link.href}>{link.label}</Link>
+        <div className="footer-link-groups">
+          {FOOTER_GROUPS.map((group) => (
+            <nav key={group.title} className="footer-link-group" aria-label={group.title}>
+              <div className="footer-link-group-title">{group.title}</div>
+              {group.links.map((link) => (
+                <Link key={link.href} href={link.href}>{link.label}</Link>
+              ))}
+            </nav>
           ))}
-        </nav>
+        </div>
       </div>
       <div className="footer-bottom">© {year} {footer.copyrightName}. Tüm hakları saklıdır.</div>
     </footer>

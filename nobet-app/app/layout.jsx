@@ -27,6 +27,14 @@ const inter = Inter({
 // <head> elementini layout JSX'ine ELLE eklemek (bir önceki denemede
 // yapıldığı gibi) framework'ün kendi head yönetimiyle çakışıp hydration
 // hatası veriyor — doğru yol `verification` metadata alanı, bkz. altta.
+// Mobil menü artık tam ekran (100dvh) ve safe-area padding kullanıyor —
+// viewport-fit=cover olmadan env(safe-area-inset-*) her zaman 0 döner.
+export const viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
+};
+
 export async function generateMetadata() {
   const supabase = createClient();
   const settingsRaw = await getSiteContentCached(supabase, 'global_settings').catch(() => null);

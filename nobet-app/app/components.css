@@ -104,18 +104,63 @@
 .navbar-burger.open span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
 .navbar-mobile {
   display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 100dvh;
+  z-index: 90;
   flex-direction: column;
-  gap: 14px;
-  padding: 16px 24px 24px;
   background: var(--surface);
-  border-bottom: 1px solid var(--border);
+  padding: calc(72px + env(safe-area-inset-top, 0px)) max(24px, env(safe-area-inset-right, 0px)) calc(24px + env(safe-area-inset-bottom, 0px)) max(24px, env(safe-area-inset-left, 0px));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-8px);
+  transition: opacity 0.22s ease, transform 0.22s ease, visibility 0s linear 0.22s;
 }
-.navbar-mobile a { color: var(--text-muted); text-decoration: none; font-size: 15px; font-weight: 500; }
+.navbar-mobile.open {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+  transition: opacity 0.22s ease, transform 0.22s ease, visibility 0s linear 0s;
+}
+.navbar-mobile-links { display: flex; flex-direction: column; gap: 2px; }
+.navbar-mobile-links a {
+  color: var(--text);
+  text-decoration: none;
+  font-size: 17px;
+  font-weight: 600;
+  padding: 14px 2px;
+  border-bottom: 1px solid var(--border);
+  transition: color 0.15s;
+}
+.navbar-mobile-links a:hover { color: var(--primary-hover); }
+.navbar-mobile-actions {
+  margin-top: auto;
+  padding-top: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.navbar-mobile-actions .btn { width: 100%; }
+.navbar-mobile-cta-hint {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--text-muted);
+  text-align: center;
+}
 
 @media (max-width: 760px) {
   .navbar-links, .navbar-actions { display: none; }
   .navbar-burger { display: flex; }
   .navbar-mobile { display: flex; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .navbar-mobile { transition: none; }
 }
 
 /* ── LOGO (public/brand/okulnobet-logo.png'nin sunum katmanı) ──── */
@@ -153,9 +198,18 @@
   transition: color 0.15s;
 }
 .footer-contact a:hover { color: var(--primary-hover); }
-.footer-links { display: flex; flex-wrap: wrap; gap: 14px 20px; align-content: flex-start; }
-.footer-links a { color: var(--text-muted); text-decoration: none; font-size: 13px; }
-.footer-links a:hover { color: var(--text); }
+.footer-link-groups { display: flex; gap: 48px; flex-wrap: wrap; }
+.footer-link-group { display: flex; flex-direction: column; gap: 11px; min-width: 130px; }
+.footer-link-group-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  color: var(--text);
+  margin-bottom: 3px;
+}
+.footer-link-group a { color: var(--text-muted); text-decoration: none; font-size: 13px; }
+.footer-link-group a:hover { color: var(--text); }
 .footer-bottom {
   max-width: 1080px;
   margin: 28px auto 0;
@@ -163,6 +217,12 @@
   border-top: 1px solid var(--border);
   color: var(--text-muted);
   font-size: 12px;
+}
+
+@media (max-width: 560px) {
+  .footer-top { flex-direction: column; gap: 28px; }
+  .footer-link-groups { width: 100%; gap: 32px; }
+  .footer-link-group { min-width: 0; flex: 1 1 45%; }
 }
 
 /* ── HERO MOCKUP ────────────────────────────────────────────────── */

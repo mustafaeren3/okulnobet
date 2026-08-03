@@ -7,6 +7,16 @@ import LoginModal from './LoginModal';
 import SignupModal from './SignupModal';
 import Logo from './Logo';
 
+const MOBILE_NAV_LINKS = [
+  { href: '/', label: 'Ana Sayfa' },
+  { href: '/fiyatlandirma', label: 'Fiyatlandırma' },
+  { href: '/#ozellikler', label: 'Özellikler' },
+  { href: '/blog', label: 'Blog' },
+  { href: '/sss', label: 'SSS' },
+  { href: '/hakkimizda', label: 'Hakkımızda' },
+  { href: '/kurumsal', label: 'İletişim' },
+];
+
 // app/page.jsx ve app/(marketing)/layout.jsx tarafından paylaşılan tek
 // header. Giriş/Kayıt modallarının açık/kapalı durumu burada tutuluyor —
 // iki mount noktası da aynı bileşenleri kullandığı için ayrı bir
@@ -26,6 +36,28 @@ export default function Navbar() {
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
+  // Mobil menü açıkken arka plan scroll'u kilitlenir ve ESC menüyü kapatır
+  // — Modal.jsx'teki aynı desen (bkz. o dosyadaki gerekçe: native <dialog>
+  // yerine düz div + manuel odak/scroll yönetimi).
+  useEffect(() => {
+    if (!mobileOpen) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    function onKeyDown(e) {
+      if (e.key === 'Escape') setMobileOpen(false);
+    }
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [mobileOpen]);
+
+  function closeMobile() {
+    setMobileOpen(false);
+  }
+
   function openLogin() {
     setMobileOpen(false);
     setLoginOpen(true);
@@ -38,8 +70,8 @@ export default function Navbar() {
 
   return (
     <>
-      <header className={`navbar ${scrolled ? 'navbar-scrolled' : ''}`}>
-        <Link href="/" className="navbar-logo">
+      <header className={`navbar ${scrolled || mobileOpen ? 'navbar-scrolled' : ''}`}>
+        <Link href="/" className="navbar-logo" onClick={closeMobile}>
           <Logo size={30} />
           <span>OkulNöbet</span>
         </Link>
@@ -60,6 +92,7 @@ export default function Navbar() {
           className={`navbar-burger ${mobileOpen ? 'open' : ''}`}
           aria-label={mobileOpen ? 'Menüyü kapat' : 'Menüyü aç'}
           aria-expanded={mobileOpen}
+          aria-controls="navbar-mobile-panel"
           onClick={() => setMobileOpen((v) => !v)}
         >
           <span />
@@ -68,15 +101,29 @@ export default function Navbar() {
         </button>
       </header>
 
-      {mobileOpen && (
-        <div className="navbar-mobile">
-          <Link href="/fiyatlandirma" onClick={() => setMobileOpen(false)}>Fiyatlandırma</Link>
-          <Link href="/#ozellikler" onClick={() => setMobileOpen(false)}>Özellikler</Link>
-          <Link href="/sss" onClick={() => setMobileOpen(false)}>SSS</Link>
+      {/* Panel her zaman DOM'da kalır (AnimatePresence YOK — altta modallar
+          için bırakılan not aynı framer-motion/AnimatePresence exit hatasına
+          işaret ediyor); açık/kapalı durumu tek bir CSS class ile sürülüyor,
+          böylece hem açılış hem kapanış geçişi çalışıyor ve dışarı tıklama/ESC
+          state'i güncellediği an panel gerçekten kapanıyor. */}
+      <div
+        id="navbar-mobile-panel"
+        className={`navbar-mobile ${mobileOpen ? 'open' : ''}`}
+        aria-hidden={!mobileOpen}
+        onClick={closeMobile}
+      >
+        <nav className="navbar-mobile-links" onClick={(e) => e.stopPropagation()}>
+          {MOBILE_NAV_LINKS.map((link) => (
+            <Link key={link.href} href={link.href} onClick={closeMobile}>{link.label}</Link>
+          ))}
+        </nav>
+
+        <div className="navbar-mobile-actions" onClick={(e) => e.stopPropagation()}>
           <Button variant="outline" onClick={openLogin}>Giriş Yap</Button>
+          <p className="navbar-mobile-cta-hint">İlk programınızı ücretsiz oluşturun.</p>
           <Button variant="primary" onClick={openSignup}>Ücretsiz Başla</Button>
         </div>
-      )}
+      </div>
 
       {/* Kalite denetimi bulgusu: framer-motion 12.43.0'da AnimatePresence,
           bu modallardaki iç içe motion.div (backdrop + panel) yapısıyla

@@ -24,7 +24,7 @@ export default function FiyatlandirmaPage() {
           <ul style={{ listStyle: 'none', padding: 0, margin: '16px 0', display: 'grid', gap: 8, fontSize: 13, textAlign: 'left' }}>
             {FREE_FEATURES.map((f) => <li key={f} style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Check size={14} color="var(--success)" /> {f}</li>)}
           </ul>
-          <Link href="/signup" className="mkt-btn mkt-btn-primary" style={{ width: '100%' }}>Ücretsiz Kayıt Ol</Link>
+          <Link href="/signup" className="mkt-btn mkt-btn-primary" style={{ width: '100%' }}>Ücretsiz Başla</Link>
         </div>
 
         <div className="mkt-pricing-card mkt-pricing-highlight">
@@ -34,7 +34,7 @@ export default function FiyatlandirmaPage() {
           <ul style={{ listStyle: 'none', padding: 0, margin: '16px 0', display: 'grid', gap: 8, fontSize: 13, textAlign: 'left' }}>
             {STANDARD_FEATURES.map((f) => <li key={f} style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Check size={14} color="var(--success)" /> {f}</li>)}
           </ul>
-          <Link href="/signup" className="mkt-btn mkt-btn-primary" style={{ width: '100%' }}>Ücretsiz Kayıt Ol</Link>
+          <Link href="/signup" className="mkt-btn mkt-btn-primary" style={{ width: '100%' }}>Hemen Satın Al</Link>
         </div>
 
         <div className="mkt-pricing-card">
