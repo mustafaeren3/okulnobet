@@ -1,7 +1,24 @@
 import { SUPPORT_EMAIL } from '../../components/contactInfo';
+import { buildPageMetadata } from '@/lib/seo/metadata';
+import { faqSchema } from '@/lib/seo/schema';
+import Breadcrumbs from '../../components/Breadcrumbs';
+import JsonLd from '../../components/JsonLd';
 
-export const metadata = { title: 'Sık Sorulan Sorular' };
+export const metadata = buildPageMetadata({
+  path: '/sss',
+  title: 'Sık Sorulan Sorular',
+  description: 'OkulNöbet hakkında en çok sorulan sorular: ücretsiz kullanım, fiyatlandırma, ödeme yöntemleri, veri güvenliği ve teknik destek.',
+});
 
+const BREADCRUMB_ITEMS = [
+  { name: 'Ana Sayfa', path: '/' },
+  { name: 'Sık Sorulan Sorular', path: '/sss' },
+];
+
+// `a`: sayfada gösterilen JSX. `plainA`: FAQPage JSON-LD için düz metin
+// karşılığı — Google, yapılandırılmış veri metninin görünür içerikle
+// eşleşmesini bekliyor; yalnızca son maddede (mailto linki) `a` JSX
+// olduğu için ayrı düz metin gerekiyor, diğerlerinde ikisi aynı.
 const FAQS = [
   {
     q: 'OkulNöbet tam olarak ne yapıyor?',
@@ -30,12 +47,15 @@ const FAQS = [
   {
     q: 'Teknik destek nasıl alırım?',
     a: <span><a href={`mailto:${SUPPORT_EMAIL}`} style={{ color: 'var(--primary-hover)' }}>{SUPPORT_EMAIL}</a> üzerinden bize ulaşabilirsin.</span>,
+    plainA: `${SUPPORT_EMAIL} üzerinden bize ulaşabilirsin.`,
   },
 ];
 
 export default function SssPage() {
   return (
     <main className="mkt-main mkt-narrow">
+      <JsonLd data={faqSchema(FAQS.map((item) => ({ q: item.q, a: item.plainA || item.a })))} />
+      <Breadcrumbs items={BREADCRUMB_ITEMS} />
       <div className="mkt-hero" style={{ padding: '20px 0 8px' }}>
         <h1>Sık Sorulan Sorular</h1>
       </div>

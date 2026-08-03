@@ -2,12 +2,23 @@ import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
 import { listPublishedPosts } from '@/lib/db/blog';
 import { getSeoMeta } from '@/lib/db/cms';
+import { buildPageMetadata } from '@/lib/seo/metadata';
+import Breadcrumbs from '../../components/Breadcrumbs';
 
 export async function generateMetadata() {
   const supabase = createClient();
   const seo = await getSeoMeta(supabase, '/blog').catch(() => null);
-  return { title: seo?.title || 'Blog', description: seo?.description || 'OkulNöbet blog — nöbet yönetimi, MEB mevzuatı ve okul idaresi üzerine yazılar.' };
+  return buildPageMetadata({
+    path: '/blog',
+    title: seo?.title || 'Blog',
+    description: seo?.description || 'OkulNöbet blog — nöbet yönetimi, MEB mevzuatı ve okul idaresi üzerine yazılar.',
+  });
 }
+
+const BREADCRUMB_ITEMS = [
+  { name: 'Ana Sayfa', path: '/' },
+  { name: 'Blog', path: '/blog' },
+];
 
 function formatDate(d) {
   if (!d) return '';
@@ -20,6 +31,7 @@ export default async function BlogListPage() {
 
   return (
     <main className="mkt-main mkt-narrow">
+      <Breadcrumbs items={BREADCRUMB_ITEMS} />
       <div className="mkt-hero" style={{ padding: '20px 0 8px' }}>
         <h1>Blog</h1>
       </div>

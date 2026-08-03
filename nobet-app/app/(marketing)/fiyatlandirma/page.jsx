@@ -1,6 +1,8 @@
 import Link from 'next/link';
 import { Check, Repeat2, Scale, Flag, Printer } from 'lucide-react';
 import { STANDARD_YEARLY_PRICE, formatTL } from '@/lib/engine/pricing';
+import { buildPageMetadata } from '@/lib/seo/metadata';
+import Breadcrumbs from '../../components/Breadcrumbs';
 
 const FREE_FEATURES = ['Program oluşturabilir', 'İlk ayı görüntüleyebilir', 'Ürünü deneyebilir'];
 const STANDARD_FEATURES = [
@@ -8,9 +10,21 @@ const STANDARD_FEATURES = [
   'Excel dışa aktarma', 'Programı paylaşma', 'Geçmiş programlar', 'Sınırsız yeniden oluşturma',
 ];
 
+export const metadata = buildPageMetadata({
+  path: '/fiyatlandirma',
+  title: 'Fiyatlandırma',
+  description: 'OkulNöbet fiyatlandırma: Ücretsiz, Standart ve Kurumsal planlar. Basit, şeffaf paketler — gizli ücret yok.',
+});
+
+const BREADCRUMB_ITEMS = [
+  { name: 'Ana Sayfa', path: '/' },
+  { name: 'Fiyatlandırma', path: '/fiyatlandirma' },
+];
+
 export default function FiyatlandirmaPage() {
   return (
     <main className="mkt-main">
+      <Breadcrumbs items={BREADCRUMB_ITEMS} />
       <div className="mkt-hero" style={{ padding: '20px 0 8px' }}>
         <h1>Fiyatlandırma</h1>
         <p>Basit, şeffaf paketler. Gizli ücret yok.</p>

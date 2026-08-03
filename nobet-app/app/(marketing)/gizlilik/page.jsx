@@ -1,12 +1,23 @@
 import { CONTACT_EMAIL } from '../../components/contactInfo';
 import { createClient } from '@/lib/supabase/server';
 import { getSiteContent, getSeoMeta } from '@/lib/db/cms';
+import { buildPageMetadata } from '@/lib/seo/metadata';
+import Breadcrumbs from '../../components/Breadcrumbs';
 
 export async function generateMetadata() {
   const supabase = createClient();
   const seo = await getSeoMeta(supabase, '/gizlilik').catch(() => null);
-  return { title: seo?.title || 'Gizlilik Politikası', description: seo?.description || undefined };
+  return buildPageMetadata({
+    path: '/gizlilik',
+    title: seo?.title || 'Gizlilik Politikası',
+    description: seo?.description || 'OkulNöbet KVKK ve Gizlilik Politikası — hangi kişisel veriler toplanır, nasıl korunur ve kullanıcı hakları nelerdir.',
+  });
 }
+
+const BREADCRUMB_ITEMS = [
+  { name: 'Ana Sayfa', path: '/' },
+  { name: 'Gizlilik Politikası', path: '/gizlilik' },
+];
 
 // İçerik Yönetimi → KVKK & Gizlilik Politikası'nda bir metin girilmişse
 // (bodyHtml) o gösterilir; boşsa aşağıdaki varsayılan (şablon/placeholder
@@ -17,6 +28,7 @@ export default async function GizlilikPage() {
   if (content?.bodyHtml) {
     return (
       <main className="mkt-main mkt-narrow">
+        <Breadcrumbs items={BREADCRUMB_ITEMS} />
         <div className="mkt-hero" style={{ padding: '20px 0 8px' }}><h1>Gizlilik Politikası</h1></div>
         <div className="mkt-section" dangerouslySetInnerHTML={{ __html: content.bodyHtml }} />
       </main>
@@ -25,6 +37,7 @@ export default async function GizlilikPage() {
 
   return (
     <main className="mkt-main mkt-narrow">
+      <Breadcrumbs items={BREADCRUMB_ITEMS} />
       <div className="mkt-hero" style={{ padding: '20px 0 8px' }}>
         <h1>Gizlilik Politikası</h1>
       </div>

@@ -1,4 +1,4 @@
-const BASE_URL = 'https://okulnobet.com';
+import { SITE_URL } from '@/lib/seo/constants';
 
 export default function robots() {
   return {
@@ -6,9 +6,12 @@ export default function robots() {
       userAgent: '*',
       allow: '/',
       // Kimlik doğrulama gerektiren / kullanıcıya özel alanlar arama
-      // motorlarınca taranmasın.
+      // motorlarınca taranmasın. (wizard) route group'undaki diğer
+      // klasörler (account, teachers, rules, vb.) gerçek route değil —
+      // hepsi tek /dashboard sayfasının sekmeleri, bkz. o klasörlerdeki
+      // "Tek sayfa" notu — ayrıca disallow edilmelerine gerek yok.
       disallow: ['/dashboard', '/super-admin', '/share/'],
     },
-    sitemap: `${BASE_URL}/sitemap.xml`,
+    sitemap: `${SITE_URL}/sitemap.xml`,
   };
 }

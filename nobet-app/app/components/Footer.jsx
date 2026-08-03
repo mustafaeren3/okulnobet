@@ -10,6 +10,7 @@ const FOOTER_GROUPS = [
   {
     title: 'Kurumsal',
     links: [
+      { href: '/fiyatlandirma', label: 'Fiyatlandırma' },
       { href: '/hakkimizda', label: 'Hakkımızda' },
       { href: '/blog', label: 'Blog' },
       { href: '/sss', label: 'SSS' },
@@ -46,7 +47,9 @@ export default async function Footer() {
     <footer className="footer">
       <div className="footer-top">
         <div className="footer-brand">
-          <Logo variant="full" size={56} />
+          <Link href="/" aria-label="OkulNöbet — Ana Sayfa">
+            <Logo variant="full" size={56} />
+          </Link>
           <p>{footer.description}</p>
           <div className="footer-contact">
             <a href={`mailto:${contact.email}`}><Mail size={14} /> {contact.email}</a>

@@ -1,12 +1,24 @@
 import { AlertTriangle } from 'lucide-react';
 import Alert from '../../components/Alert';
 import { SUPPORT_EMAIL } from '../../components/contactInfo';
+import { buildPageMetadata } from '@/lib/seo/metadata';
+import Breadcrumbs from '../../components/Breadcrumbs';
 
-export const metadata = { title: 'Ödeme Güvenliği' };
+export const metadata = buildPageMetadata({
+  path: '/odeme-guvenligi',
+  title: 'Ödeme Güvenliği',
+  description: 'OkulNöbet ödemeleri PCI-DSS uyumlu, 3D Secure korumalı ödeme sağlayıcılar üzerinden işlenir — kart bilgileriniz sunucularımızda saklanmaz.',
+});
+
+const BREADCRUMB_ITEMS = [
+  { name: 'Ana Sayfa', path: '/' },
+  { name: 'Ödeme Güvenliği', path: '/odeme-guvenligi' },
+];
 
 export default function OdemeGuvenligiPage() {
   return (
     <main className="mkt-main mkt-narrow">
+      <Breadcrumbs items={BREADCRUMB_ITEMS} />
       <div className="mkt-hero" style={{ padding: '20px 0 8px' }}>
         <h1>Ödeme Güvenliği</h1>
       </div>

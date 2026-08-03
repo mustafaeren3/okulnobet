@@ -1,6 +1,13 @@
 import Link from 'next/link';
 import LoginForm from '../../components/LoginForm';
 import Logo from '../../components/Logo';
+import { buildPageMetadata } from '@/lib/seo/metadata';
+
+export const metadata = buildPageMetadata({
+  path: '/login',
+  title: 'Giriş Yap',
+  description: 'OkulNöbet hesabınıza giriş yapın ve okulunuzun nöbet programını yönetin.',
+});
 
 export default function LoginPage() {
   return (

@@ -1,9 +1,12 @@
 import { Inter } from 'next/font/google';
 import Script from 'next/script';
 import PageTransition from './components/PageTransition';
+import JsonLd from './components/JsonLd';
 import { createClient } from '@/lib/supabase/server';
 import { getSiteContentCached } from '@/lib/db/cms';
 import { withDefaults } from '@/lib/data/siteContentDefaults';
+import { SITE_URL, DEFAULT_OG_IMAGE } from '@/lib/seo/constants';
+import { organizationSchema, websiteSchema } from '@/lib/seo/schema';
 import './globals.css';
 import './components.css';
 // Kök layout'ta: LoginModal/SignupModal (Navbar üzerinden HER route'ta
@@ -33,6 +36,7 @@ export const viewport = {
   width: 'device-width',
   initialScale: 1,
   viewportFit: 'cover',
+  themeColor: '#0b1220',
 };
 
 export async function generateMetadata() {
@@ -40,7 +44,8 @@ export async function generateMetadata() {
   const settingsRaw = await getSiteContentCached(supabase, 'global_settings').catch(() => null);
   const settings = withDefaults('global_settings', settingsRaw);
   return {
-    metadataBase: new URL('https://okulnobet.com'),
+    metadataBase: new URL(SITE_URL),
+    applicationName: settings.siteName,
     title: {
       default: `${settings.siteName} — Okullar için Otomatik Nöbet Programı`,
       template: `%s — ${settings.siteName}`,
@@ -48,10 +53,17 @@ export async function generateMetadata() {
     description: settings.siteDescription,
     openGraph: {
       title: settings.siteName,
-      description: 'Okullar için otomatik nöbet planlama, adil dağıtım, MEB takvimi, tek tıkla PDF çıktısı.',
-      images: ['/brand/okulnobet-logo.png'],
+      description: settings.siteDescription,
+      siteName: settings.siteName,
+      images: [DEFAULT_OG_IMAGE],
       locale: 'tr_TR',
       type: 'website',
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: settings.siteName,
+      description: settings.siteDescription,
+      images: [DEFAULT_OG_IMAGE],
     },
     verification: settings.gscVerification ? { google: settings.gscVerification } : undefined,
     // favicon/apple-touch-icon: app/icon.png (Next.js App Router convention) üzerinden
@@ -70,6 +82,13 @@ export default async function RootLayout({ children }) {
   return (
     <html lang="tr" className={inter.variable}>
       <body>
+        {/* Organization + WebSite — marka kimliğinin her sayfada aynı
+            olması Google'ın siteyi tek bir varlık olarak tanıyıp zamanla
+            sitelinks göstermesi için temel sinyallerden biri. Sayfaya
+            özel BreadcrumbList/FAQPage/SoftwareApplication ayrı ayrı
+            ilgili page.jsx'lerde (bkz. Breadcrumbs.jsx, lib/seo/schema.js). */}
+        <JsonLd data={organizationSchema()} />
+        <JsonLd data={websiteSchema()} />
         {settings.gtmId && (
           <Script id="gtm" strategy="afterInteractive">
             {`(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);})(window,document,'script','dataLayer','${settings.gtmId}');`}

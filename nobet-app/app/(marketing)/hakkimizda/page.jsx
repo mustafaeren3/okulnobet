@@ -1,8 +1,21 @@
-export const metadata = { title: 'Hakkımızda' };
+import { buildPageMetadata } from '@/lib/seo/metadata';
+import Breadcrumbs from '../../components/Breadcrumbs';
+
+export const metadata = buildPageMetadata({
+  path: '/hakkimizda',
+  title: 'Hakkımızda',
+  description: "OkulNöbet, Türkiye'deki okulların nöbet ve görev planlama süreçlerini kolaylaştırmak için geliştirilen bulut tabanlı bir platformdur. Kim olduğumuzu, misyonumuzu ve vizyonumuzu öğrenin.",
+});
+
+const BREADCRUMB_ITEMS = [
+  { name: 'Ana Sayfa', path: '/' },
+  { name: 'Hakkımızda', path: '/hakkimizda' },
+];
 
 export default function HakkimizdaPage() {
   return (
     <main className="mkt-main mkt-narrow">
+      <Breadcrumbs items={BREADCRUMB_ITEMS} />
       <header className="about-header">
         <h1>Hakkımızda</h1>
       </header>

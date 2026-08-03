@@ -6,8 +6,11 @@ import { isPlatformAdmin } from '@/lib/db/platformAdmin';
 import { getSiteContent, getSeoMeta } from '@/lib/db/cms';
 import { withDefaults } from '@/lib/data/siteContentDefaults';
 import { STANDARD_YEARLY_PRICE, formatTL } from '@/lib/engine/pricing';
+import { SITE_NAME, DEFAULT_OG_IMAGE, DEFAULT_DESCRIPTION } from '@/lib/seo/constants';
+import { softwareApplicationSchema } from '@/lib/seo/schema';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
+import JsonLd from './components/JsonLd';
 import { CONTACT_EMAIL } from './components/contactInfo';
 import Card from './components/Card';
 import Button from './components/Button';
@@ -24,23 +27,44 @@ import './(marketing)/landing.css';
 // SEO — Faz 2.3: seo_meta tablosundan (admin panel → SEO) besleniyor,
 // hiç düzenlenmemişse layout.jsx'teki varsayılana düşer (Next.js
 // generateMetadata + üst layout metadata'sını otomatik birleştirir).
+// canonical/siteName/OG/Twitter admin hiç düzenlemese bile HER ZAMAN
+// dolu olsun diye burada varsayılanlarla birlikte kuruluyor.
+//
+// ÖNEMLİ: `title`/`description` alanları seo satırı yoksa OBJEYE HİÇ
+// EKLENMİYOR (değeri `undefined` olarak set edilmiyor) — Next.js bir
+// alanı `undefined` olarak dönmeyi o alanı hiç dönmemekle aynı
+// saymıyor, üst layout'un title.default'una düşmek yerine sayfayı
+// başlıksız/açıklamasız bırakıyor (canlıda görülüp düzeltildi).
 export async function generateMetadata() {
   const supabase = createClient();
   const seo = await getSeoMeta(supabase, '/').catch(() => null);
-  if (!seo) return {};
-  return {
-    title: seo.title || undefined,
-    description: seo.description || undefined,
-    keywords: seo.keywords || undefined,
-    alternates: seo.canonical ? { canonical: seo.canonical } : undefined,
-    robots: seo.noindex ? { index: false, follow: false } : undefined,
+  const description = seo?.description || DEFAULT_DESCRIPTION;
+  const fullTitle = seo?.title ? `${seo.title} — ${SITE_NAME}` : SITE_NAME;
+  const ogImage = seo?.og_image || DEFAULT_OG_IMAGE;
+
+  const metadata = {
+    description,
+    alternates: { canonical: seo?.canonical || '/' },
     openGraph: {
-      title: seo.og_title || seo.title || undefined,
-      description: seo.og_description || seo.description || undefined,
-      images: seo.og_image ? [seo.og_image] : undefined,
+      title: seo?.og_title || fullTitle,
+      description: seo?.og_description || description,
+      url: '/',
+      siteName: SITE_NAME,
+      locale: 'tr_TR',
+      type: 'website',
+      images: [ogImage],
     },
-    twitter: seo.twitter_card ? { card: seo.twitter_card } : undefined,
+    twitter: {
+      card: seo?.twitter_card || 'summary_large_image',
+      title: seo?.og_title || fullTitle,
+      description: seo?.og_description || description,
+      images: [ogImage],
+    },
   };
+  if (seo?.title) metadata.title = seo.title;
+  if (seo?.keywords) metadata.keywords = seo.keywords;
+  if (seo?.noindex) metadata.robots = { index: false, follow: false };
+  return metadata;
 }
 
 // Kök `/` route'u — (marketing) route group'un DIŞINDA (parantezli
@@ -79,6 +103,7 @@ export default async function Home() {
 
   return (
     <div className="mkt-root">
+      <JsonLd data={softwareApplicationSchema({ price: STANDARD_YEARLY_PRICE })} />
       <Navbar />
 
       <main className="mkt-main">

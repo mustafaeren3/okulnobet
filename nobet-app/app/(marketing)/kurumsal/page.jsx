@@ -5,6 +5,12 @@ import Link from 'next/link';
 import { CheckCircle2, Mail } from 'lucide-react';
 import { submitEnterpriseLead } from './actions';
 import { CONTACT_EMAIL } from '../../components/contactInfo';
+import Breadcrumbs from '../../components/Breadcrumbs';
+
+const BREADCRUMB_ITEMS = [
+  { name: 'Ana Sayfa', path: '/' },
+  { name: 'İletişim', path: '/kurumsal' },
+];
 
 export default function KurumsalPage() {
   const [fields, setFields] = useState({ schoolName: '', contactName: '', phone: '', email: '', teacherCountEstimate: '', note: '' });
@@ -28,6 +34,7 @@ export default function KurumsalPage() {
 
   return (
     <main className="mkt-main">
+      <Breadcrumbs items={BREADCRUMB_ITEMS} />
       <div className="mkt-hero" style={{ padding: '20px 0 8px' }}>
         <h1>Kurumsal Paket</h1>
         <p>Birden fazla okulu veya ilçe/il müdürlüğünü yönetiyorsan, ihtiyacına özel bir teklif hazırlayalım.</p>

@@ -29,6 +29,25 @@
 .mkt-main { max-width: 1120px; margin: 0 auto; padding: 48px 24px 96px; }
 .mkt-main.mkt-narrow { max-width: 760px; }
 
+/* ── BREADCRUMBS (Breadcrumbs.jsx) ─────────────────────────────── */
+.breadcrumbs { margin: 0 0 8px; }
+.breadcrumbs ol {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.breadcrumbs li { display: flex; align-items: center; gap: 6px; }
+.breadcrumbs li:not(:last-child)::after { content: '/'; color: var(--border); }
+.breadcrumbs a { color: var(--text-muted); text-decoration: none; }
+.breadcrumbs a:hover { color: var(--text); }
+.breadcrumbs [aria-current="page"] { color: var(--text); font-weight: 500; }
+
 .mkt-hero { text-align: center; padding: 60px 24px 40px; }
 .mkt-hero h1 {
   font-family: var(--font-heading);

@@ -1,11 +1,22 @@
 import { createClient } from '@/lib/supabase/server';
 import { getSiteContent, getSeoMeta } from '@/lib/db/cms';
+import { buildPageMetadata } from '@/lib/seo/metadata';
+import Breadcrumbs from '../../components/Breadcrumbs';
 
 export async function generateMetadata() {
   const supabase = createClient();
   const seo = await getSeoMeta(supabase, '/cerez-politikasi').catch(() => null);
-  return { title: seo?.title || 'Çerez Politikası', description: seo?.description || undefined };
+  return buildPageMetadata({
+    path: '/cerez-politikasi',
+    title: seo?.title || 'Çerez Politikası',
+    description: seo?.description || 'OkulNöbet Çerez Politikası — hangi çerezleri neden kullandığımız ve tarayıcınızdan nasıl yöneteceğiniz.',
+  });
 }
+
+const BREADCRUMB_ITEMS = [
+  { name: 'Ana Sayfa', path: '/' },
+  { name: 'Çerez Politikası', path: '/cerez-politikasi' },
+];
 
 // Yeni sayfa (Faz 2.3) — tamamen İçerik Yönetimi'nden besleniyor, admin
 // panelden hiç düzenlenmemişse aşağıdaki genel varsayılan metin gösterilir.
@@ -15,6 +26,7 @@ export default async function CerezPolitikasiPage() {
 
   return (
     <main className="mkt-main mkt-narrow">
+      <Breadcrumbs items={BREADCRUMB_ITEMS} />
       <div className="mkt-hero" style={{ padding: '20px 0 8px' }}>
         <h1>Çerez Politikası</h1>
       </div>

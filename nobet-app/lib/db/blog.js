@@ -50,7 +50,7 @@ export async function deleteBlogPost(supabase, id) {
 export async function listPublishedPosts(supabase) {
   const { data, error } = await supabase
     .from('blog_posts')
-    .select('id, slug, title, excerpt, cover_image_url, category, published_at')
+    .select('id, slug, title, excerpt, cover_image_url, category, published_at, updated_at')
     .eq('status', 'published')
     .order('published_at', { ascending: false });
   if (error) throw new Error(error.message);

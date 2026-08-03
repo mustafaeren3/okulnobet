@@ -76,10 +76,13 @@ export default function Navbar() {
           <span>OkulNöbet</span>
         </Link>
 
-        <nav className="navbar-links">
+        <nav className="navbar-links" aria-label="Ana menü">
           <Link href="/fiyatlandirma">Fiyatlandırma</Link>
           <Link href="/#ozellikler">Özellikler</Link>
+          <Link href="/blog">Blog</Link>
           <Link href="/sss">SSS</Link>
+          <Link href="/hakkimizda">Hakkımızda</Link>
+          <Link href="/kurumsal">İletişim</Link>
         </nav>
 
         <div className="navbar-actions">
@@ -112,7 +115,7 @@ export default function Navbar() {
         aria-hidden={!mobileOpen}
         onClick={closeMobile}
       >
-        <nav className="navbar-mobile-links" onClick={(e) => e.stopPropagation()}>
+        <nav className="navbar-mobile-links" aria-label="Mobil menü" onClick={(e) => e.stopPropagation()}>
           {MOBILE_NAV_LINKS.map((link) => (
             <Link key={link.href} href={link.href} onClick={closeMobile}>{link.label}</Link>
           ))}

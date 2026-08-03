@@ -1,0 +1,16 @@
+-- 0034'te blog_posts_public_read_published politikası
+-- "status = 'published' or platform_is_admin_aal2()" olarak tanımlandı,
+-- ama platform_is_admin_aal2() yalnızca authenticated'a grant edilmişti
+-- (anon'dan bilinçli olarak revoke edilmişti — 0034 satır 47-48).
+-- Postgres, RLS politikasındaki bir OR ifadesinde fonksiyonu planlama
+-- aşamasında yetki kontrolüne tabi tutuyor; anon bu fonksiyonu HİÇ
+-- çağıramadığı için (kısa devre değerlendirmesi olsa bile) her anon
+-- SELECT'i "permission denied for function platform_is_admin_aal2"
+-- hatasıyla düşüyordu — yani /blog ve /blog/[slug], giriş yapmamış
+-- ziyaretçiler (ve Googlebot) için 500 veriyordu.
+--
+-- Fonksiyona anon EXECUTE izni vermek güvenli: SECURITY DEFINER olsa da
+-- içeride yalnızca auth.uid()/auth.jwt() okuyor — anon çağrıda ikisi de
+-- boş olduğundan fonksiyon anon için her zaman false döner, ekstra bir
+-- yetki açığı doğurmaz; yalnızca "bu ifadeyi çalıştırabilirsin" izni.
+grant execute on function public.platform_is_admin_aal2() to anon;
