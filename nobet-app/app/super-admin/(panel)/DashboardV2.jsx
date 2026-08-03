@@ -3,6 +3,7 @@
 import {
   Users, UserPlus, CalendarPlus, CalendarRange, School, ClipboardList,
   ClipboardCheck, CreditCard, Gift, AlertTriangle, GraduationCap, Activity, LogIn,
+  Mail, MailCheck, MailX,
 } from 'lucide-react';
 import {
   ResponsiveContainer, LineChart, Line, BarChart, Bar, PieChart, Pie, Cell,
@@ -42,6 +43,15 @@ export default function DashboardV2({ stats, successRate }) {
         <StatCard icon={AlertTriangle} label="Süresi Dolan / Donuk" value={stats.expired_or_frozen_count} href="/super-admin/users?status=expired" />
         <StatCard icon={Activity} label="Sistem Durumu" value={successRate !== null ? `%${successRate}` : '—'} hint="üretim başarı oranı" />
         <StatCard icon={LogIn} label="Son Giriş Yapanlar" value="→" hint="son girişe göre sırala" href="/super-admin/users?quick=recent_login" />
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <h3 className="text-xs font-semibold text-muted-foreground">Pazarlama İzni (KVKK)</h3>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          <StatCard icon={Mail} label="Toplam Kullanıcı" value={stats.marketing_consent_stats?.total ?? 0} />
+          <StatCard icon={MailCheck} label="İzin Veren" value={stats.marketing_consent_stats?.granted ?? 0} />
+          <StatCard icon={MailX} label="İzin Vermeyen" value={stats.marketing_consent_stats?.not_granted ?? 0} />
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">

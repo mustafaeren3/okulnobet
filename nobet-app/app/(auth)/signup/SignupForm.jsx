@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { Eye, EyeOff } from 'lucide-react';
 import { startSignup, resendSignupCode, verifySignupCode, searchSchoolsAction } from './actions';
 import { MEB_PROVINCES, getDistrictsForProvince } from '@/lib/data/mebProvinceDistricts';
@@ -35,6 +36,11 @@ export default function SignupForm() {
   const [manualOkulAdi, setManualOkulAdi] = useState('');
   const manualDistricts = useMemo(() => getDistrictsForProvince(manualIl), [manualIl]);
 
+  // KVKK: Kullanım Koşulları/Gizlilik onayı ZORUNLU, pazarlama izni
+  // İSTEĞE BAĞLI (varsayılan boş) — bkz. 0045_signup_consent.sql.
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [marketingConsent, setMarketingConsent] = useState(false);
+
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -63,6 +69,7 @@ export default function SignupForm() {
     e.preventDefault();
     setError('');
     if (!okulAdiFinal || !il || !ilce) { setError('Okulunu seç veya elle gir.'); return; }
+    if (!termsAccepted) { setError("Devam etmek için Kullanım Koşulları ve Gizlilik Politikası onayı gerekli."); return; }
     setBusy(true);
     const res = await startSignup({
       fullName: fields.fullName.trim(),
@@ -71,6 +78,7 @@ export default function SignupForm() {
       okulAdi: okulAdiFinal,
       il,
       ilce,
+      termsAccepted,
     });
     setBusy(false);
     if (res?.error) { setError(res.error); return; }
@@ -89,6 +97,7 @@ export default function SignupForm() {
       okulAdi: okulAdiFinal,
       il,
       ilce,
+      marketingConsent,
     });
     setBusy(false);
     if (res?.error) setError(res.error);
@@ -178,6 +187,36 @@ export default function SignupForm() {
               </button>
             </div>
           </div>
+
+          <div className="auth-consent">
+            <label className="auth-consent-row">
+              <input
+                type="checkbox"
+                checked={termsAccepted}
+                onChange={(e) => setTermsAccepted(e.target.checked)}
+                required
+              />
+              <span>
+                <Link href="/kullanim-sartlari" target="_blank" rel="noopener noreferrer">Kullanım Koşulları&apos;nı</Link>
+                {' '}ve{' '}
+                <Link href="/gizlilik" target="_blank" rel="noopener noreferrer">Gizlilik Politikası&apos;nı</Link>
+                {' '}okudum, kabul ediyorum.
+              </span>
+            </label>
+
+            <label className="auth-consent-row">
+              <input
+                type="checkbox"
+                checked={marketingConsent}
+                onChange={(e) => setMarketingConsent(e.target.checked)}
+              />
+              <span>
+                OkulNöbet&apos;in yeni özellikleri, ürün güncellemeleri, eğitim içerikleri ve kampanyaları hakkında
+                e-posta almayı kabul ediyorum.
+              </span>
+            </label>
+          </div>
+
           <button type="submit" className="btn btn-primary" style={{ width: '100%' }} disabled={busy}>
             {busy ? 'Gönderiliyor...' : 'Kaydol'}
           </button>

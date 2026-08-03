@@ -92,6 +92,27 @@
 .auth-field input::placeholder { color: #4c5875; }
 .auth-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 
+.auth-consent { display: flex; flex-direction: column; gap: 10px; margin: 16px 0; }
+.auth-consent-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.auth-consent-row input[type='checkbox'] {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  margin-top: 1px;
+  accent-color: var(--primary);
+  cursor: pointer;
+}
+.auth-consent-row a { color: var(--primary-hover); text-decoration: underline; }
+.auth-consent-row a:hover { color: var(--primary); }
+
 .auth-password-wrap { position: relative; }
 .auth-password-wrap input { padding-right: 44px; }
 .auth-password-toggle {

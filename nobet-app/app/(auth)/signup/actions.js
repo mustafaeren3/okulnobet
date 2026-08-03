@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import { searchSchools } from '@/lib/data/schoolSearch';
 import { mapAuthErrorMessage, sanitizeDbErrorMessage } from '@/lib/errors';
+import { TERMS_VERSION, PRIVACY_POLICY_VERSION } from '@/lib/data/legalVersions';
 
 // İki aşamalı kayıt: (1) hesap oluştur — e-postaya 6 haneli OTP gider,
 // (2) kod doğrulanınca okul oluşturur. OTP doğrulanmadan school/
@@ -44,7 +45,15 @@ async function inferSchoolType(il, ilce, okulAdi) {
   return match?.type || 'diger';
 }
 
-export async function startSignup({ fullName, email, password, okulAdi, il, ilce }) {
+export async function startSignup({ fullName, email, password, okulAdi, il, ilce, termsAccepted }) {
+  // KVKK: Kullanım Koşulları/Gizlilik Politikası onayı zorunlu — client'taki
+  // checkbox'a (required + kendi state kontrolü) güvenmek yerine burada da
+  // doğrulanıyor, çünkü bu bir server action ve UI'ı atlayarak doğrudan
+  // çağrılabilir. Onay yoksa auth.users kaydı bile açılmıyor.
+  if (!termsAccepted) {
+    return { error: 'Devam etmek için Kullanım Koşulları ve Gizlilik Politikası onayı gerekli.' };
+  }
+
   const supabase = createClient();
   const { data, error } = await supabase.auth.signUp({
     email,
@@ -77,18 +86,24 @@ export async function resendSignupCode(email) {
   return { ok: true };
 }
 
-export async function verifySignupCode({ email, code, okulAdi, il, ilce }) {
+export async function verifySignupCode({ email, code, okulAdi, il, ilce, marketingConsent }) {
   const supabase = createClient();
 
   const { error: verifyError } = await supabase.auth.verifyOtp({ email, token: code, type: 'signup' });
   if (verifyError) return { error: mapAuthErrorMessage(verifyError.message) };
 
   const schoolType = await inferSchoolType(il, ilce, okulAdi);
+  // Hangi Kullanım Koşulları/Gizlilik Politikası SÜRÜMÜNÜN kabul edildiği
+  // sunucudaki sabitten damgalanıyor — client'ın hangi sürümü kabul
+  // ettiğini iddia etmesine güvenilmez (bkz. lib/data/legalVersions.js).
   const { error: rpcError } = await supabase.rpc('register_school', {
     p_name: okulAdi,
     p_city: il,
     p_district: ilce,
     p_school_type: schoolType,
+    p_marketing_consent: !!marketingConsent,
+    p_terms_version: TERMS_VERSION,
+    p_privacy_policy_version: PRIVACY_POLICY_VERSION,
   });
   if (rpcError) return { error: sanitizeDbErrorMessage(rpcError.message) };
 
