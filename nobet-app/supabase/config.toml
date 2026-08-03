@@ -260,6 +260,13 @@ sender_name = "OkulNöbet"
 subject = "OkulNöbet — E-posta Doğrulama Kodun"
 content_path = "./supabase/templates/confirmation.html"
 
+# Subject buradaki tam metinle lib/data/emailSubjects.js'teki
+# RECOVERY_EMAIL_SUBJECT birebir aynı olmalı — webhook route mail
+# türünü SADECE bu konu satırından çıkarabiliyor (bkz. o dosya).
+[auth.email.template.recovery]
+subject = "OkulNöbet — Şifre Sıfırlama Kodun"
+content_path = "./supabase/templates/recovery.html"
+
 # Uncomment to customize notification email template
 # [auth.email.notification.password_changed]
 # enabled = true

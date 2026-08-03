@@ -1,0 +1,13 @@
+-- ═══════════════════════════════════════════════════════════════
+-- DÜZELTME: record_email_event() service_role'e hiç grant edilmemişti
+-- ═══════════════════════════════════════════════════════════════
+-- 0054'te "revoke all ... from public, authenticated, anon" yazıldı ama
+-- service_role AYRI bir role — Postgres'te fonksiyonlara varsayılan
+-- EXECUTE PUBLIC'e (yani "herkese", service_role dahil) verilir; PUBLIC'ten
+-- REVOKE edilince service_role de kaybeder, service_role'e AYRICA grant
+-- edilmemişse (ki edilmemişti) erişimi tamamen kalmaz. Bu, webhook
+-- route'unun (service-role client kullanan tek çağıran) fonksiyonu hiç
+-- çağıramaması demekti — canlıya push edilmeden, doğrudan RPC testiyle
+-- yakalandı (bkz. rapor). 0054 zaten remote'a uygulandığı için dosyası
+-- DEĞİL, ayrı bir düzeltme migration'ı ile kapatılıyor.
+grant execute on function public.record_email_event(text, text, text, text, text, text, timestamptz, jsonb, text) to service_role;

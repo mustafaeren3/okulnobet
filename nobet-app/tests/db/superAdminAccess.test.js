@@ -80,4 +80,53 @@ describe('Süper admin RPC çağrıları — yetkisiz erişim reddi', () => {
     const { error: updateError } = await client.from('platform_admins').update({ role: 'owner' }).eq('user_id', user?.id || '');
     expect(updateError).not.toBeNull();
   }, 30000);
+
+  // ── Email Merkezi (bkz. 0054/0057_email_log*.sql) ──────────────────
+  it('email_log tablosu normal kullanıcı tarafından okunamaz (RLS/grant — eler)', async () => {
+    const client = newClient();
+    await signUpAndRegisterSchool(client, makeTestUser('noadmin-emaillog', RUN_ID));
+
+    const { data, error } = await client.from('email_log').select('*');
+    expect(error).not.toBeNull();
+    expect(data).toBeNull();
+  }, 30000);
+
+  it('platform_admins üyesi olmayan bir kullanıcı platform_list_email_log_page çağıramaz (eler)', async () => {
+    const client = newClient();
+    await signUpAndRegisterSchool(client, makeTestUser('noadmin-emaillist', RUN_ID));
+
+    const { data, error } = await client.rpc('platform_list_email_log_page', {});
+    expect(data).toBeNull();
+    expect(error).not.toBeNull();
+    expect(error.message).toMatch(/Yetkiniz yok|MFA/);
+  }, 30000);
+
+  it('platform_admins üyesi olmayan bir kullanıcı platform_email_log_stats çağıramaz (eler)', async () => {
+    const client = newClient();
+    await signUpAndRegisterSchool(client, makeTestUser('noadmin-emailstats', RUN_ID));
+
+    const { data, error } = await client.rpc('platform_email_log_stats');
+    expect(data).toBeNull();
+    expect(error).not.toBeNull();
+  }, 30000);
+
+  it('record_email_event SADECE service_role için — normal (authenticated) kullanıcı çağıramaz (eler)', async () => {
+    // Bu fonksiyon webhook route'unun (service-role client) TEK çağıranı
+    // olmalı — sahte "delivered"/"verified" olayı enjekte edilebilmesi
+    // ciddi bir güvenlik açığı olurdu (bkz. migration 0054/0055 notu).
+    const client = newClient();
+    await signUpAndRegisterSchool(client, makeTestUser('noadmin-recordevent', RUN_ID));
+
+    const { error } = await client.rpc('record_email_event', {
+      p_provider: 'resend',
+      p_provider_event_id: 'evt_forged',
+      p_provider_message_id: 'msg_forged',
+      p_to_email: 'kurban@example.invalid',
+      p_mail_type_hint: 'confirmation',
+      p_event_type: 'email.delivered',
+      p_occurred_at: new Date().toISOString(),
+      p_raw_payload: {},
+    });
+    expect(error).not.toBeNull();
+  }, 30000);
 });

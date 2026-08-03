@@ -16,6 +16,7 @@ const NAV_ITEMS = [
   { href: '/super-admin/seo', label: 'SEO' },
   { href: '/super-admin/blog', label: 'Blog' },
   { href: '/super-admin/analytics', label: 'Analytics' },
+  { href: '/super-admin/email-center', label: 'Email Merkezi' },
   { href: '/super-admin/system-events', label: 'Sistem Olayları' },
   { href: '/super-admin/audit-logs', label: 'İşlem Geçmişi' },
   { href: '/super-admin/settings', label: 'Ayarlar' },

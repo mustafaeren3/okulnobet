@@ -5,6 +5,8 @@ import { redirect } from 'next/navigation';
 import { searchSchools } from '@/lib/data/schoolSearch';
 import { mapAuthErrorMessage, sanitizeDbErrorMessage } from '@/lib/errors';
 import { TERMS_VERSION, PRIVACY_POLICY_VERSION } from '@/lib/data/legalVersions';
+import { logEmailPending, markEmailVerified } from '@/lib/db/emailLog';
+import { getClientContext } from '@/lib/requestContext';
 
 // İki aşamalı kayıt: (1) hesap oluştur — e-postaya 6 haneli OTP gider,
 // (2) kod doğrulanınca okul oluşturur. OTP doğrulanmadan school/
@@ -76,6 +78,9 @@ export async function startSignup({ fullName, email, password, okulAdi, il, ilce
     await supabase.auth.signOut();
   }
 
+  const { ip, userAgent } = getClientContext();
+  await logEmailPending(supabase, email, 'confirmation', ip, userAgent);
+
   return { ok: true };
 }
 
@@ -83,6 +88,10 @@ export async function resendSignupCode(email) {
   const supabase = createClient();
   const { error } = await supabase.auth.resend({ type: 'signup', email });
   if (error) return { error: mapAuthErrorMessage(error.message) };
+
+  const { ip, userAgent } = getClientContext();
+  await logEmailPending(supabase, email, 'confirmation', ip, userAgent);
+
   return { ok: true };
 }
 
@@ -91,6 +100,8 @@ export async function verifySignupCode({ email, code, okulAdi, il, ilce, marketi
 
   const { error: verifyError } = await supabase.auth.verifyOtp({ email, token: code, type: 'signup' });
   if (verifyError) return { error: mapAuthErrorMessage(verifyError.message) };
+
+  await markEmailVerified(supabase, email, 'confirmation');
 
   const schoolType = await inferSchoolType(il, ilce, okulAdi);
   // Hangi Kullanım Koşulları/Gizlilik Politikası SÜRÜMÜNÜN kabul edildiği

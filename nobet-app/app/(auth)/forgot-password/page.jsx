@@ -1,15 +1,15 @@
 import Link from 'next/link';
-import LoginForm from '../../components/LoginForm';
+import ForgotPasswordForm from './ForgotPasswordForm';
 import Logo from '../../components/Logo';
 import { buildPageMetadata } from '@/lib/seo/metadata';
 
 export const metadata = buildPageMetadata({
-  path: '/login',
-  title: 'Giriş Yap',
-  description: 'OkulNöbet hesabınıza giriş yapın ve okulunuzun nöbet programını yönetin.',
+  path: '/forgot-password',
+  title: 'Şifremi Unuttum',
+  description: 'OkulNöbet hesabının şifresini e-posta ile gönderilen kodla sıfırla.',
 });
 
-export default function LoginPage() {
+export default function ForgotPasswordPage() {
   return (
     <div className="auth-root">
       <div className="auth-card">
@@ -18,13 +18,8 @@ export default function LoginPage() {
           <span>OkulNöbet</span>
         </Link>
         <div className="auth-subtitle">Okullar için otomatik nöbet programı</div>
-        <h1>Giriş Yap</h1>
 
-        <LoginForm />
-
-        <div className="auth-back" style={{ marginTop: 4, textAlign: 'center' }}>
-          <Link href="/forgot-password">Şifremi Unuttum</Link>
-        </div>
+        <ForgotPasswordForm />
 
         <div className="auth-footer-link">
           Hesabın yok mu? <Link href="/signup">Okulunu kaydet</Link>

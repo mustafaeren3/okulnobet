@@ -13,6 +13,10 @@ export default function LoginModal({ onClose }) {
 
         <LoginForm />
 
+        <div className="auth-back" style={{ marginTop: 4, textAlign: 'center' }}>
+          <Link href="/forgot-password" onClick={onClose}>Şifremi Unuttum</Link>
+        </div>
+
         <div className="auth-footer-link">
           Hesabın yok mu? <Link href="/signup" onClick={onClose}>Okulunu kaydet</Link>
         </div>
