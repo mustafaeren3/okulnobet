@@ -13,3 +13,6 @@ coverage/
 # node_modules + .next içerip kimlik bilgisi sızdırabilir (bkz.
 # PHASE_REPORT.md). Proje kökünde/export'larda zip barındırılmasın.
 *.zip
+
+.vercel
+.env*
