@@ -81,6 +81,33 @@
 .mkt-section h3 { font-size: 16px; margin: 20px 0 8px; }
 .mkt-section p, .mkt-section li { color: var(--text-muted); line-height: 1.7; font-size: 14px; }
 
+/* Blog yazısı içeriği (dangerouslySetInnerHTML ile basılan ham HTML)
+   ham <table> kullanıyor — önceden hiç stil yoktu, tarayıcı varsayılanı
+   hem çirkin görünüyor hem dar ekranlarda taşmaya yol açıyordu.
+   table-layout: fixed + overflow-wrap ile sütunlar konteynerin dışına
+   taşmadan metni sarıyor, ayrı bir yatay scroll sarmalayıcıya gerek yok. */
+.mkt-section table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  margin: 20px 0;
+  font-size: 13px;
+}
+.mkt-section th, .mkt-section td {
+  border: 1px solid var(--border);
+  padding: 10px 12px;
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: break-word;
+}
+.mkt-section th {
+  background: var(--card);
+  color: var(--text);
+  font-weight: 700;
+}
+.mkt-section td { color: var(--text-muted); }
+.mkt-section tbody tr:nth-child(even) { background: rgba(255, 255, 255, 0.02); }
+
 .mkt-card {
   background: var(--card);
   border: 1px solid var(--border);

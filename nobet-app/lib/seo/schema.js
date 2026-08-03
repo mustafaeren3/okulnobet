@@ -63,6 +63,28 @@ export function breadcrumbSchema(items) {
   };
 }
 
+// Blog yazıları için BlogPosting — image/datePublished/dateModified
+// olmadan da geçerli ama varsa Google'a tazelik/yazar sinyali verir.
+export function articleSchema({ headline, description, path, image, datePublished, dateModified, authorName }) {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'BlogPosting',
+    headline,
+    description,
+    url: `${SITE_URL}${path}`,
+    mainEntityOfPage: `${SITE_URL}${path}`,
+    image: image ? [image] : [`${SITE_URL}${DEFAULT_OG_IMAGE}`],
+    datePublished: datePublished || undefined,
+    dateModified: dateModified || datePublished || undefined,
+    author: { '@type': 'Organization', name: authorName || SITE_NAME },
+    publisher: {
+      '@type': 'Organization',
+      name: SITE_NAME,
+      logo: { '@type': 'ImageObject', url: `${SITE_URL}${DEFAULT_OG_IMAGE}` },
+    },
+  };
+}
+
 // items: [{ q, a }] — a düz metin olmalı (JSX/HTML değil); sayfadaki
 // görünür SSS metniyle birebir aynı olması gerekiyor.
 export function faqSchema(items) {

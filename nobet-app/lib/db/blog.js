@@ -26,6 +26,7 @@ export async function upsertBlogPost(supabase, post, userId) {
     tags: post.tags || [],
     meta_title: post.metaTitle || null,
     meta_description: post.metaDescription || null,
+    faq: post.faq || null,
     updated_at: new Date().toISOString(),
   };
   if (post.status === 'published' && !post.publishedAt) {
