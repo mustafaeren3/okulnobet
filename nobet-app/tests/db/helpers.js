@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { createHmac } from 'node:crypto';
+import { TERMS_VERSION, PRIVACY_POLICY_VERSION } from '@/lib/data/legalVersions';
 
 // Tenant izolasyon testlerinin ortak kurulumu: iki taraflı "gerçek Supabase
 // projesine karşı geçici okul + kullanıcı oluştur" mantığı burada tek yerde
@@ -7,6 +8,7 @@ import { createHmac } from 'node:crypto';
 
 export const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 export const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+export const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 export function makeTestUser(label, runId) {
   return {
@@ -28,25 +30,47 @@ export function newClient() {
   return createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 }
 
+// Production'da "Confirm email" AÇIK (bkz. supabase/config.toml, app/(auth)/signup/actions.js'in
+// iki fazlı OTP akışı bunu şart koşuyor) — normal signUp() artık session döndürmez, e-postaya
+// kod gider. Testler gerçek e-posta bekleyemez: service-role ile ÖNCEDEN ONAYLANMIŞ bir kullanıcı
+// oluşturulup (email_confirm:true), sonra normal (anon) client ile şifreyle giriş yapılıyor —
+// register_school RPC'si hâlâ gerçek authenticated bir kullanıcı bağlamında (RLS altında) çağrılıyor.
+function adminClient() {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    throw new Error(
+      '.env.local içinde SUPABASE_SERVICE_ROLE_KEY bulunamadı. DB testleri, "Confirm email" ' +
+        'açıkken önceden onaylanmış test kullanıcısı oluşturmak için buna ihtiyaç duyuyor.'
+    );
+  }
+  return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+}
+
 export async function signUpAndRegisterSchool(client, user) {
-  const { data: signUpData, error: signUpError } = await client.auth.signUp({
+  const admin = adminClient();
+  const { error: createError } = await admin.auth.admin.createUser({
+    email: user.email,
+    password: user.password,
+    email_confirm: true,
+  });
+  if (createError) {
+    throw new Error(`admin.createUser başarısız (${user.email}): ${createError.message}`);
+  }
+  const { data: signInData, error: signInError } = await client.auth.signInWithPassword({
     email: user.email,
     password: user.password,
   });
-  if (signUpError) {
-    throw new Error(`signUp başarısız (${user.email}): ${signUpError.message}`);
-  }
-  if (!signUpData.session) {
-    throw new Error(
-      `signUp oturum döndürmedi (${user.email}). Supabase Auth > Providers > Email > ` +
-        `"Confirm email" ayarı açık olabilir; pilot/test ortamında kapatılmalı.`
-    );
+  if (signInError || !signInData.session) {
+    throw new Error(`signIn başarısız (${user.email}): ${signInError?.message || 'oturum yok'}`);
   }
   const { data: schoolId, error: rpcError } = await client.rpc('register_school', {
     p_name: user.schoolName,
     p_city: 'Test',
     p_district: 'Test',
     p_school_type: user.schoolType,
+    p_terms_version: TERMS_VERSION,
+    p_privacy_policy_version: PRIVACY_POLICY_VERSION,
   });
   if (rpcError) {
     throw new Error(`register_school başarısız (${user.email}): ${rpcError.message}`);

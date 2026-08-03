@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { Eye, EyeOff } from 'lucide-react';
 import { startSignup, resendSignupCode, verifySignupCode, searchSchoolsAction } from './actions';
@@ -19,6 +19,11 @@ import SchoolSearchField from './SchoolSearchField';
 // "başlık sarmalayıcıda" ayrımı burada zorlama olurdu. Modal, bu id'yi
 // aria-labelledby için kullanıyor; sayfada aria-labelledby hiç
 // kullanılmadığı için id'nin orada durması zararsız.
+// supabase/config.toml [auth.email] max_frequency = "30s" ile birebir aynı tutulmalı —
+// sunucu zaten bu süreden önceki isteği reddediyor, buton burada sadece o gerçeği
+// yansıtıyor (kullanıcı erken tıklarsa sunucudan generic bir hata almasın diye).
+const RESEND_COOLDOWN_SECONDS = 30;
+
 export default function SignupForm() {
   // phase 'form': bilgiler toplanır. phase 'code': e-postaya giden 6
   // haneli kod girilir, doğrulanınca okul oluşturulur.
@@ -45,7 +50,16 @@ export default function SignupForm() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [resendMsg, setResendMsg] = useState('');
+  const [resendCooldown, setResendCooldown] = useState(0);
   const [showPassword, setShowPassword] = useState(false);
+
+  // 'code' fazına her girişte (ilk gönderim VEYA tekrar gönder) geri sayım başlar —
+  // buton, sunucunun zaten reddedeceği bir isteği kullanıcı erken tıklamasın diye kilitlenir.
+  useEffect(() => {
+    if (phase !== 'code' || resendCooldown <= 0) return;
+    const timer = setInterval(() => setResendCooldown((s) => Math.max(0, s - 1)), 1000);
+    return () => clearInterval(timer);
+  }, [phase, resendCooldown]);
 
   // SchoolSearchField'a stabil bir referans geçiyoruz (useCallback) —
   // aksi halde her render'da yeni bir fonksiyon, arama kutusunun kendi
@@ -85,6 +99,7 @@ export default function SignupForm() {
     // OTP doğrulanmadan hesap/okul tamamlanmıyor — startSignup() artık HİÇBİR
     // durumda doğrudan dashboard'a yönlendirmiyor, her zaman kod adımına geçilir.
     setPhase('code');
+    setResendCooldown(RESEND_COOLDOWN_SECONDS);
   }
 
   async function handleVerify(e) {
@@ -105,9 +120,11 @@ export default function SignupForm() {
   }
 
   async function handleResend() {
+    if (resendCooldown > 0) return;
     setResendMsg('');
     const res = await resendSignupCode(fields.email);
-    setResendMsg(res?.error ? res.error : 'Kod tekrar gönderildi.');
+    setResendMsg(res?.error ? res.error : 'Kod tekrar gönderildi. Gelen kutunda göremezsen spam/gereksiz klasörüne bak.');
+    setResendCooldown(RESEND_COOLDOWN_SECONDS);
   }
 
   return (
@@ -227,6 +244,8 @@ export default function SignupForm() {
         <form onSubmit={handleVerify} style={{ marginTop: 20 }}>
           <div className="auth-info">
             <strong>{fields.email}</strong> adresine 6 haneli bir onay kodu gönderdik. Kodu aşağıya gir.
+            <br />
+            E-posta birkaç dakika içinde gelmezse lütfen <strong>spam / gereksiz</strong> klasörünü kontrol et.
           </div>
           <div className="auth-field">
             <label>Onay Kodu</label>
@@ -243,8 +262,14 @@ export default function SignupForm() {
           <button type="submit" className="btn btn-primary" style={{ width: '100%' }} disabled={busy}>
             {busy ? 'Doğrulanıyor...' : 'Onayla ve Devam Et'}
           </button>
-          <button type="button" onClick={handleResend} className="btn btn-outline" style={{ width: '100%', marginTop: 10 }}>
-            Kodu Tekrar Gönder
+          <button
+            type="button"
+            onClick={handleResend}
+            className="btn btn-outline"
+            style={{ width: '100%', marginTop: 10 }}
+            disabled={resendCooldown > 0}
+          >
+            {resendCooldown > 0 ? `Kodu Tekrar Gönder (${resendCooldown}sn)` : 'Kodu Tekrar Gönder'}
           </button>
           {resendMsg && <div className="auth-subtitle" style={{ marginTop: 10, marginBottom: 0 }}>{resendMsg}</div>}
         </form>
