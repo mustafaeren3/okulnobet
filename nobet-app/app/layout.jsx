@@ -46,6 +46,7 @@ export async function generateMetadata() {
   return {
     metadataBase: new URL(SITE_URL),
     applicationName: settings.siteName,
+    alternates: { types: { 'application/rss+xml': '/rss.xml' } },
     title: {
       default: `${settings.siteName} — Okullar için Otomatik Nöbet Programı`,
       template: `%s — ${settings.siteName}`,

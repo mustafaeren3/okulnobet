@@ -19,7 +19,11 @@ export function buildPageMetadata({ path, title, description, image, noindex = f
   const metadata = {
     title,
     description: desc,
-    alternates: { canonical: path },
+    // types.rss burada tekrarlanıyor çünkü Next.js `alternates` objesini
+    // segment bazında bütün olarak değiştiriyor (deep-merge etmiyor) —
+    // kökte bir kez tanımlayıp burada atlasaydık, bu fonksiyonu kullanan
+    // her sayfada RSS keşif linki sessizce kaybolurdu.
+    alternates: { canonical: path, types: { 'application/rss+xml': '/rss.xml' } },
     openGraph: {
       title: fullTitle,
       description: desc,

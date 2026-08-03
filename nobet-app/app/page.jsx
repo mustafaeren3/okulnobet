@@ -44,7 +44,7 @@ export async function generateMetadata() {
 
   const metadata = {
     description,
-    alternates: { canonical: seo?.canonical || '/' },
+    alternates: { canonical: seo?.canonical || '/', types: { 'application/rss+xml': '/rss.xml' } },
     openGraph: {
       title: seo?.og_title || fullTitle,
       description: seo?.og_description || description,
